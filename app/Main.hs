@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -94,18 +93,18 @@ instance Backprop Credit
 makeLenses ''Credit
 
 dot :: Num a => [a] -> [a] -> a
-dot x y = foldl (+) 0 $ zipWith (*) x y
+dot x y = sum $ zipWith (*) x y
 
 m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
 
 -- take the difference of a list with a starting elemtn
 difference ::Num a => Maybe a -> [a] -> [a]
-difference (Just begin) l = zipWith (-) l ([begin] ++ init l)
+difference (Just begin) l = zipWith (-) l (begin : init l)
 difference Nothing l = zipWith (-) (tail l) (init l)
 
 differenceR ::Num a => Maybe a -> [a] -> [a]
-differenceR (Just begin) l = zipWith (flip (-)) l ([begin] ++ init l)
+differenceR (Just begin) l = zipWith (flip (-)) l (begin : init l)
 differenceR Nothing      l = zipWith (flip (-)) (tail l) (init l)
 
 -- take forward rates and gives a discount factor back
@@ -119,7 +118,7 @@ integrateCurve forwardRates t = exp (-(dot timesDiff forwardRates')) where
     datesH        = sequenceVar $ forwardRates ^^. dates
     times         = filteredT ++ [t]
     filteredT     = filter (t >) datesH
-    times'        = [0] ++ init times
+    times'        = 0 : init times
     timesDiff     = difference (Just 0) times
 
 -- get f_i h_i and b_i from the  curves
@@ -136,9 +135,9 @@ getFHB mkt joinDates = (fi,hi,bi) where
 -- computes the discouunt factor of the protecitonLeg
 --protectionLegDF :: Reifies s W => BVar s Market -> BVBar s Rate
 protectionLegDF :: Reifies s W => BVar s Market -> BVar s Rate
-protectionLegDF mkt = foldr (+) 0 $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
+protectionLegDF mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
     diffBi    = differenceR (Just 1) bi
-    joinDates = [0] ++ nodeDates mkt
+    joinDates = 0 : nodeDates mkt
     (fi,hi,bi) = getFHB mkt joinDates
 
 nodeDates :: Reifies s W => BVar s Market -> [BVar s Time]
@@ -154,7 +153,7 @@ accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
     -- all the cash flow payment dates
     cfDates  = sequenceVar $ auto cf ^^. cashDates
     -- cash flow start and end dates
-    cfStartEnd  = zip ([0] ++ cfDates) cfDates
+    cfStartEnd  = zip (0 : cfDates) cfDates
 
     -- all the mkt not dates joint
     mktDates = nodeDates mkt
@@ -170,7 +169,7 @@ accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
     quantityCashFlows = sequenceVar $ auto cf ^^. quantity
 
 helperF  :: Reifies s W => BVar s Market -> [BVar s Rate] -> BVar s Price
-helperF mkt dates = foldr (+) 0 res  where
+helperF mkt dates = sum res  where
     (fi,hi,bi) = getFHB mkt dates
     diffBi     = differenceR Nothing bi
     dti        = difference Nothing dates
@@ -188,13 +187,13 @@ cashFlowValue cashflows mkt = discounted where
         discountFact      = map (integrateCurve (mkt ^^. irCurve )) timesCashFlows
 
         quantityCashFlows = sequenceVar $ auto cashflows ^^. quantity
-        discounted        = foldr (+) 0 $  zipWith3 m3 discountFact quantityCashFlows survivalProbs
+        discounted        = sum $  zipWith3 m3 discountFact quantityCashFlows survivalProbs
 
 cdsPrice :: Reifies s W => CashFlows -> Credit -> BVar s Market -> BVar s Price
 cdsPrice cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
     couponLeg = cashFlowValue cashFlows mkt
     aI = accruedInterest cashFlows mkt
-    defaultLeg = notional' * (1-rr) * (protectionLegDF mkt) where
+    defaultLeg = notional' * (1-rr) * protectionLegDF mkt where
         notional'  = cD ^^. notional
         rr   = cD ^^. recoveryRate
         cD   = auto creditData
@@ -202,8 +201,8 @@ cdsPrice cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
 
 
 callPrice :: (Ord a, Floating a) => a -> a -> a -> a -> a -> a -> a
-callPrice r k sigma currentTime endTime st = (normalCDF d1) * st - (normalCDF d2) * pvk  where
-    d1           = 1/(sigma * (sqrt tau)) * ( log (st/k)  + tau*(r+sigma*sigma/2) )
+callPrice r k sigma currentTime endTime st = normalCDF d1 * st - normalCDF d2 * pvk  where
+    d1           = 1/(sigma * sqrt tau) * ( log (st/k)  + tau*(r+sigma*sigma/2) )
     d2           = d1 - sigma * sqrt tau
     tau          = endTime - currentTime
     pvk          = k * exp (-r * tau)
@@ -212,7 +211,7 @@ callPrice r k sigma currentTime endTime st = (normalCDF d1) * st - (normalCDF d2
 --https://backprop.jle.im/03-manipulating-bvars.html
 --instead of hardcoding in what value to differentiate in pass the set of lenses to the function
 delta :: ModelParams -> Price -> Price
-delta bls z = gradBP (\x-> callPrice (bs ^^. r) (bs ^^. strike) (bs ^^. sigma) (bs ^^. currentTime) (bs ^^. endTime) x) z
+delta bls = gradBP (callPrice (bs ^^. r) (bs ^^. strike) (bs ^^. sigma) (bs ^^. currentTime) (bs ^^. endTime))
     where
         bs = constVar bls
 
