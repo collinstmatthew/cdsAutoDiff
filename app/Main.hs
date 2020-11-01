@@ -76,32 +76,33 @@ dot x y = foldl (+) 0 $ zipWith (*) x y
 m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
 
--- take a hazard curve and produces a survival rate at a given point in time
--- assums hazard rates are piecewise constant
-survivalCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Time
-survivalCurve hazard t = exp (-(dot timesDiff hazardRates)) where
-    hazardRates = tail $ take (numDate+1) (sequenceVar (hazard ^^. rates) )
-    datesH      = sequenceVar $ hazard ^^. dates
-    numDate     = length filteredT
-    times       = filteredT ++ [datesH!!numDate]
-    filteredT   = (filter ((<) t) datesH)
-    times'      = [0] ++ (init times)
-    timesDiff   = zipWith (-) times times'
+-- take forward rates and gives a discount factor back
+-- assums forward rates are piecewise constant
+integrateCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
+integrateCurve forwardRates t = exp (-(dot timesDiff forwardRates')) where
+    forwardRates' = take numDate (sequenceVar (forwardRates ^^. rates) )
+    datesH        = sequenceVar $ forwardRates ^^. dates
+    numDate       = length filteredT
+    times         = filteredT ++ [datesH!!numDate]
+    filteredT     = (filter ((<) t) datesH)
+    times'        = [0] ++ (init times)
+    timesDiff     = zipWith (-) times times'
+
+-- gets the yield instead of the discouunt factor
+yieldCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
+yieldCurve forwardRates t = (1/t) * log (integrateCurve forwardRates t) where
 
 -- Takes a curve a sums all the points on it dummy functional on curve
--- will become more complicated naturally
 cashFlowValue :: Reifies s W => CashFlows -> BVar s Market -> BVar s Price
---fixedLegPrice cashflows ircurve = foldr (+) 0 (tenorRates) where
 cashFlowValue cashflows mkt = discounted where
-        tenorRates     = sequenceVar (mkt ^^. irCurve ^^. rates)
-        -- should change this to cash flow payment times
-        timesHazard    = sequenceVar (mkt ^^. hazardRates ^^. dates)
-        survivalVals   = map (survivalCurve (mkt ^^. hazardRates )) timesHazard
-        tenorCashFlows = sequenceVar $ (auto cashflows) ^^. quantity
-        discounted     = foldr (+) 0 $  zipWith3 m3 tenorRates tenorCashFlows survivalVals
+        timesCashFlows    = sequenceVar $ (auto cashflows) ^^. cashDates
+        survivalProbs     = map (integrateCurve (mkt ^^. hazardRates )) timesCashFlows
+        discountFact      = map (integrateCurve (mkt ^^. irCurve )) timesCashFlows
 
+        quantityCashFlows = sequenceVar $ (auto cashflows) ^^. quantity
+        discounted        = foldr (+) 0 $  zipWith3 m3 discountFact quantityCashFlows survivalProbs
 
-cdsPrice :: Reifies s W =>   CashFlows -> CashFlows -> BVar s Market -> BVar s Price
+cdsPrice :: Reifies s W => CashFlows -> CashFlows -> BVar s Market -> BVar s Price
 cdsPrice premiumleg creditLeg mkt = cashFlowValue premiumleg mkt + cashFlowValue creditLeg mkt
 
 callPrice :: (Ord a, Floating a) => a -> a -> a -> a -> a -> a -> a
@@ -125,18 +126,18 @@ main = do
     let bs = MP { _r = 0.03, _strike = 50, _sigma = 1, _currentTime = 0.0, _endTime = 1.0, _st = 40.0}
 
     -- create an interest rate curve
-    let irCurve     = Curve [0,0.5,1,1.5,2] [0.1,0.5,0.5,0.5,0.5]
-    let hazardRates = Curve [0,0.5,1,1.5,2] [0.1,0.15,0.2,0.25,0.3]
+    let mkt = Market irCurve hazardRates where
+             -- these are market forward rates
+             irCurve      = Curve [0,0.5,1,1.5,2] [0.1,0.5,0.5,0.5,0.5]
+             hazardRates  = Curve [0,0.5,1,1.5,2] [0.1,0.15,0.2,0.25,0.3]
 
-    let mkt = Market irCurve hazardRates
-
-    -- create cashflows
+    -- create cashflows for fixed leg
     let fixedLegCashFlow = CashFlows [0,0.5,1,1.5,2] [1,2,3,4,5]
 
     -- credit leg
-    let notional = 10
-    let recovery = 0.4
-    let creditLegCashFlow = CashFlows [2] [-(1-recovery)*notional]
+    let creditLegCashFlow = CashFlows [2] [-(1-recovery)*notional] where
+        notional = 10
+        recovery = 0.4
 
     print $ gradBP (cdsPrice fixedLegCashFlow creditLegCashFlow) mkt
 
