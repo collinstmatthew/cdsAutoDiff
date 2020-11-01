@@ -130,7 +130,7 @@ getFHB mkt joinDates = (fi,hi,bi) where
     qi        = map (integrateCurve hCurve) joinDates
     bi        = zipWith (*) pi qi
     fi        = differenceR Nothing $ map log pi
-    hi        = differenceR Nothing  $ map log qi
+    hi        = differenceR Nothing $ map log qi
 
 -- computes the discouunt factor of the protecitonLeg
 --protectionLegDF :: Reifies s W => BVar s Market -> BVBar s Rate
@@ -153,7 +153,7 @@ accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
     -- all the cash flow payment dates
     cfDates  = sequenceVar $ auto cf ^^. cashDates
     -- cash flow start and end dates
-    cfStartEnd  = zip (0 : cfDates) cfDates
+    cfStartEnd  = zip (0 : init cfDates) cfDates
 
     -- all the mkt not dates joint
     mktDates = nodeDates mkt
@@ -200,35 +200,33 @@ cdsPrice cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
 
 
 
-callPrice :: (Ord a, Floating a) => a -> a -> a -> a -> a -> a -> a
-callPrice r k sigma currentTime endTime st = normalCDF d1 * st - normalCDF d2 * pvk  where
-    d1           = 1/(sigma * sqrt tau) * ( log (st/k)  + tau*(r+sigma*sigma/2) )
-    d2           = d1 - sigma * sqrt tau
-    tau          = endTime - currentTime
-    pvk          = k * exp (-r * tau)
-
---first get term structure of interest rates
---https://backprop.jle.im/03-manipulating-bvars.html
---instead of hardcoding in what value to differentiate in pass the set of lenses to the function
-delta :: ModelParams -> Price -> Price
-delta bls = gradBP (callPrice (bs ^^. r) (bs ^^. strike) (bs ^^. sigma) (bs ^^. currentTime) (bs ^^. endTime))
-    where
-        bs = constVar bls
+callPrice  :: Reifies s W => BVar s ModelParams -> BVar s Price
+callPrice bs = normalCDF d1 * str - normalCDF d2 * pvk  where
+    d1           = 1/(sigma' * sqrt tau) * ( log (str/k)  + tau*(r'+sigma'*sigma'/2) )
+    d2           = d1 - sigma' * sqrt tau
+    tau          = endTime' - currentTime'
+    pvk          = k * exp (-r' * tau)
+    r'           = bs ^^. r
+    k            = bs ^^. strike
+    sigma'       = bs ^^. sigma
+    currentTime' = bs ^^. currentTime
+    endTime'     = bs ^^. endTime
+    str          = bs ^^. st
 
 main :: IO ()
 main = do
 
     let bs = MP { _r = 0.03, _strike = 50, _sigma = 1, _currentTime = 0.0, _endTime = 1.0, _st = 40.0}
 
-    let irCurve      = Curve [0.5,1,1.5,2] [0.5,0.5,0.5,0.5]
-    let hazardRates  = Curve [0.5,1,1.5,2] [0.15,0.2,0.25,0.3]
+    let irCurve      = Curve [0.1,0.5,1,1.5,2] [0.5,0.5,0.5,0.5,0.5]
+    let hazardRates  = Curve [0.1,0.5,1,1.5,2] [0.01,0.05,0.02,0.025,0.03]
 
     -- create an interest rate curve
     let mkt = Market irCurve hazardRates
              -- these are market forward rates
 
     -- create cashflows for fixed leg
-    let fixedLegCashFlow = CashFlows [0,0.5,1,1.5,2] [1,2,3,4,5]
+    let fixedLegCashFlow = CashFlows [0.5,1,1.5,2] [2,3,4,5]
     -- create credit date
     let creditData       = Credit 10 0.4
 
@@ -236,7 +234,10 @@ main = do
 
     -- credit leg
 
+--    print $ evalBP (cdsPrice fixedLegCashFlow creditData) mkt
     print $ gradBP (cdsPrice fixedLegCashFlow creditData) mkt
+
+    --print $ gradBP callPrice bs
 
     --print (delta bs 80)
 
