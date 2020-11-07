@@ -59,8 +59,8 @@ accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
 
     -- sum over each period then will do product this with eta and multiply by coupon to get result
     accrP    = map (helperF mkt) accrNodes
-    -- #TODO what is the difference between eta and Delta_i
-    eta      = difference (Just 0) cfDates
+    -- #TODO implement proper day count convention= here/get
+    eta      = map (1/) $ difference (Just 0) cfDates
     quantityCashFlows = sequenceVar $ auto cf ^^. quantity
 
 helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Rate] -> BVar s Price

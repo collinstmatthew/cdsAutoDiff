@@ -1,11 +1,8 @@
-also make everything 5 year and 3 Month and the like
-
 add in start date instead of 0 will need to divide by this discouunt factor in more place now as well then
-
-what is the difference betwen eta_i and Delta_i they're the same at the moment
-
-move things into different files
 
 move accrued interest into cash flow function
 
 use the getVal function on the curve and this should clean things up a bit
+
+implement proper day couunt convention
+

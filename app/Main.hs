@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import Numeric.Backprop
@@ -8,6 +9,14 @@ import Market(SimpleMarket(..),Curve(..))
 import Trades.CashFlow(CashFlows(..))
 import Trades.CallOption(callPrice,ModelParams(..))
 import Trades.CDS(Credit(..),cdsPrice)
+import Types
+
+-- takes a starting market and an ending market and evoles the price linearly
+-- using n number of points
+-- at the moment just gives back the price at each market
+evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Price
+evolveLinear fl cd mktStart mktEnd n = evalBP (cdsPrice fl cd) mktStart
+
 
 main :: IO ()
 main = do
@@ -19,6 +28,7 @@ main = do
     -- Create out market from curves
     -- These are market forward rates
     let irCurve      = Curve [0.1,0.5,1,1.5,2] [0.5,0.5,0.5,0.5,0.5]
+    --let hazardRates  = Curve [0.1,0.5,1,1.5,2] [0.01,0.05,0.02,0.025,0.03]
     let hazardRates  = Curve [0.1,0.5,1,1.5,2] [0.01,0.05,0.02,0.025,0.03]
 
     -- create an interest rate curve
@@ -29,7 +39,12 @@ main = do
     -- create credit data notional and recovery rate
     let creditData       = Credit 10 0.4
 
+    let result = gradBP (cdsPrice fixedLegCashFlow creditData) mkt
+    let result' = evolveLinear fixedLegCashFlow creditData mkt mkt 5
+    print result'
+
     --print $ evalBP2 integrateCurve hazardRates 3
-    print $ gradBP (cdsPrice fixedLegCashFlow creditData) mkt
+    print $ result
+--    print $ evolveLinear fixedLegCashFlow creditData mkt
 
     print "finished"

@@ -63,15 +63,14 @@ nodeDates mkt = uniqueSort (irDates ++ hazDates) where
     hazDates  = sequenceVar $ hCurve ^^. dates
     irDates   = sequenceVar $ iCurve ^^. dates
 
--- get the appropriate value at the speicif time
+-- get the appropriate value at the speicifc time assuming piecewise constant
 getVal :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
-getVal curve time   | numG == 0 = last ratesG
-                    | otherwise =  head $ drop numG ratesG where
-    numG = length $ filter (time <) datesG
+getVal curve time   | null together = last ratesG
+                    | otherwise    = (snd . head) together where
+    together = dropWhile (\x -> (fst x) < time)  $ zip datesG ratesG
     datesG = sequenceVar (curve ^^. dates)
     ratesG = sequenceVar (curve ^^. rates)
 
 -- gets the yield instead of the discouunt factor
 yieldCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
 yieldCurve forwardRates t = (1/t) * log (integrateCurve forwardRates t)
-
