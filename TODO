@@ -6,3 +6,9 @@ use the getVal function on the curve and this should clean things up a bit
 
 implement proper day couunt convention
 
+make Curves Mondoids so we can take the difference of them etc
+also allow curve to be multipled by a scalar, correct structure for this?
+
+Then make marketes monoids
+And also allow scalar multiplication by a number
+
