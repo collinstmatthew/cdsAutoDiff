@@ -21,15 +21,19 @@ import Graphics.Rendering.Chart.Backend.Diagrams
 import Control.Monad.IO.Class
 
 import qualified Diagrams.Backend.Cairo as CA
-import Diagrams.Core.Types
+import Diagrams.Core.Types(QDiagram)
 
 import Graphics.Rendering.Chart.Backend.Diagrams (defaultEnv,  runBackendR)
-import Graphics.Rendering.Chart.Easy (Renderable,bitmapAlignmentFns)
+import  Graphics.Rendering.Chart.Easy (Renderable,bitmapAlignmentFns)
 import Diagrams.TwoD.Size(mkSizeSpec2D)
 
 import qualified  Diagrams.Backend.Cairo.Internal as Int
 import qualified  Diagrams.Backend.Cairo.CmdLine as CmdInt
 import qualified  Diagrams.Prelude as DP
+
+import Graphics.Rendering.Chart.Grid(wideAbove,aboveN,besideN,gridToRenderable,Grid)
+
+import Graphics.Rendering.Chart.Backend(FillStyle(..))
 
 r' :: Double -> Double -> Double -> Double
 r' x y z = sqrt $ x^2 + y^2 + z^2
@@ -41,20 +45,15 @@ square = [(x,y) | x <- axis, y <- axis] where
 
 -- not currently dependent on y
 ef derivCurve hazardCurve (x,y) = ((getVal' derivCurve x)/r,(getVal' hazardCurve y)/r) where r = r' x y 100
-grid = square
 
-vectorField title f grid = fmap plotVectorField $ liftEC $ do
+vectorField title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
     plot_vectors_mapf  .= f
     plot_vectors_scale .= 1
-    plot_vectors_grid  .= grid
+    plot_vectors_grid  .= square
     plot_vectors_style . vector_line_style . line_color .= c
     plot_vectors_style . vector_head_style . point_color .= c
     plot_vectors_title .= title
-
---plotVec deri heri = toFile def "example12_big.png" (chart deri heri) where
-plotVec deri heri = toRenderable $ execEC (chart deri heri)
-
 
 chart deri heri =  do
         setColors [opaque black, opaque blue]
@@ -63,15 +62,18 @@ chart deri heri =  do
         layout_y_axis . laxis_generate .= scaledAxis def (0,2)
         layout_x_axis . laxis_generate .= scaledAxis def (0,2)
 
-        plot $ vectorField "Electric Field" (ef deri heri) grid
+        plot $ vectorField "Electric Field" (ef deri heri)
 
--- allow it so you can add two markets together with a type class
--- what to do if nodes are different? Take union of all nodes I guess
--- so first take difference between nodes, divide by n and then keep adding on
+-- Construct a grid of charts, with a single title accross the top
+grid :: SimpleMarket -> Grid ( Renderable (LayoutPick Rate Rate Rate))
+grid mkt = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt t r mkt) | t <-ts ] | r <- rs ]
+  where
+    ts = [1,2]
+    rs = [1,2]
+    title = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "Join grid of all"
+    --ls = def { _font_size   = 15 , _font_weight = FontWeightBold }
+    ls = def { _font_size   = 5 }
 
--- takes a starting market and an ending market and evoles the price linearly
--- using n number of points
--- at the moment just gives back the price at each market
 
 evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> [(SimpleMarket,SimpleMarket,Price)]
 evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads prices where
@@ -81,14 +83,12 @@ evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads prices where
     grads            = map (gradBP (cdsPrice fl cd)) allMkts
 
 
---pltVectorMkt :: SimpleMarket -> IO()
-pltVectorMkt mkt = do
+-- # TODO set the actual dates from the first set of markets
+pltVectorMkt :: Int -> Int -> SimpleMarket -> Layout Rate Rate
+pltVectorMkt d1 d2 mkt = do
     let ratesDerives   = set dates [0.1,0.5,1,1.5,2] $ view (irCurve)     $ mkt
         hazardsDerives = set dates [0.1,0.5,1,1.5,2] $ view (hazardRates) $ mkt
-    plotVec ratesDerives hazardsDerives
-
-
-
+    execEC (chart ratesDerives hazardsDerives)
 
 main :: IO ()
 main =  do
@@ -118,9 +118,12 @@ main =  do
 
     -- derivatives with respect to interest rate just one though
     -- set the dates to their original values
-    let rendererdImg  = map (pltVectorMkt . snd3) result'
+    --let rendererdImg  = map (toRenderable . (pltVectorMkt 1 1) . snd3) result'
+    let fs = FillStyleSolid (opaque white)
+    let rendererdImg  = map ( (fillBackground fs) . gridToRenderable . grid . snd3) result'
 
     defaultE <- defaultEnv bitmapAlignmentFns 1000 1000
+
 
     --renderToDynamicImage 100 100 rendererdImg
     let z :: [QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultE z) rendererdImg
