@@ -60,30 +60,28 @@ getVal' curve time  | null together = last ratesG
     ratesG = view rates curve
 
 
-plotCurve :: Curve -> Layout Time Rate
-plotCurve c = execEC $ do
+plotCurve :: String -> Curve -> Layout Time Rate
+plotCurve name c = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def (0,0.1)
+    layout_y_axis  . laxis_title  .= name
+    layout_x_axis  . laxis_title  .= "Time"
     setColors [opaque black, opaque blue]
-    plot $ line lbl [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
+    plot $ line "" [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
   where
     eps = 0.001
     ss = view dates c
     -- as we know the curves are constant also plot just before the date
     ss' =  map (\x->x+eps) ss
-    lbl = "Curve label"
 
 -- # This is just dummy price currently and isn't got properly
---plotPrice :: [Double] -> Layout Int Price
---plotPrice :: (PlotValue x, PlotValue y, RealFloat x, Show x) => [y] -> Layout x y
-plotPrice prices = execEC $ do
+plotPrice maxTime prices = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def (11,13)
-    layout_x_axis . laxis_generate .= scaledAxis def (0,4)
-    setColors [opaque black, opaque blue]
-    plot $ line lbl [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]
-  where
-    -- as we know the curves are constant also plot just before the date
-    lbl = "Curve label"
+    layout_x_axis . laxis_generate .= scaledAxis def (0,fromIntegral maxTime)
+    layout_x_axis  . laxis_title  .= "Time"
+    layout_y_axis  . laxis_title  .= "Price"
 
+    setColors [opaque black, opaque blue]
+    plot $ line "" [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]
 
 
 -- find the difference of the two curves

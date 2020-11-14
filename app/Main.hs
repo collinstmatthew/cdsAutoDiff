@@ -44,7 +44,8 @@ square = [(x,y) | x <- axis, y <- axis] where
     axis = [ 0.1*x' | x' <- [1..20]]
 
 -- not currently dependent on y
-ef derivCurve hazardCurve (x,y) = ((getVal' derivCurve x)/r,(getVal' hazardCurve y)/r) where r = r' x y 100
+--ef derivCurve hazardCurve (x,y) = ((getVal' derivCurve x)/r,(getVal' hazardCurve y)/r) where r = r' x y 100
+ef derivCurve hazardCurve (x,y) = ((getVal' derivCurve y)/r,(getVal' hazardCurve x)/r) where r = 1.0
 
 vectorField title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
@@ -58,24 +59,25 @@ vectorField title f = fmap plotVectorField $ liftEC $ do
 chart deri heri =  do
         setColors [opaque black, opaque blue]
 
-        layout_title .= "Derivatives of cds evolution"
-        layout_y_axis . laxis_generate .= scaledAxis def (0,2)
-        layout_x_axis . laxis_generate .= scaledAxis def (0,2)
+--        layout_title .= "Derivatives of cds evolution"
+        layout_y_axis  . laxis_generate  .= scaledAxis def (0,2)
+        layout_y_axis  . laxis_title  .= "IR Sensitivites"
+        layout_x_axis  . laxis_generate .= scaledAxis def (0,2)
+        layout_x_axis  . laxis_title  .= "Hazard Sensitivites"
 
-        plot $ vectorField "Electric Field" (ef deri heri)
+        plot $ vectorField "" (ef deri heri)
 
 -- Construct a grid of charts, with a single title accross the top
-grid :: (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
+grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
 --grid mktDeriv = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt t r mktDeriv) | t <-ts ] | r <- rs ]
-grid (mktOrig,mktDeriv,price) = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt 1 1 mktDeriv),
-                                                                     layoutToGrid (plotCurve mktirCurve),
-                                                                     layoutToGrid (plotCurve mkthzCurve) ]
-                                                          ,besideN [ layoutToGrid (plotPrice price) ]
-                                                         ]
+grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt 1 1 mktDeriv),
+                                                                     layoutToGrid (plotCurve "Interest rates" mktirCurve),
+                                                                     layoutToGrid (plotCurve "Hazard rate" mkthzCurve) ]
+                                                          ,besideN [ layoutToGrid (plotPrice maxTime price) ]   ]
   where
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
-    title = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "Join grid of all"
+    title = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "CDS sensitivies"
     ls = def { _font_size   = 15 , _font_weight = FontWeightBold }
 
 
@@ -104,21 +106,24 @@ main =  do
     -- Create out market from curves
     -- These are market forward rates
     let irCurve1      = Curve [0.1,0.5,1,1.5,2] [0.05, 0.05, 0.05, 0.05,  0.05]
-        hazardRates1  = Curve [0.1,0.5,1,1.5,2] [0.01,0.05,0.02,0.025,0.03]
+        hazardRates1  = Curve [0.1,0.5,1,1.5,2] [0.01,0.015,0.02,0.025,0.03]
         mkt1          = SimpleMarket irCurve1 hazardRates1
 
 --    plotCurve hazardRates1
 --    plotCurve hazardRates1
 
     let irCurve2      = Curve [0.1,0.5,1,1.5,2] [0.08, 0.08,  0.08, 0.08,  0.08]
-        hazardRates2  = Curve [0.1,0.5,1,1.5,2] [0.01,0.015,0.02,0.025,0.03]
+        hazardRates2  = Curve [0.1,0.5,1,1.5,2] [0.015,0.02,0.025,0.04,0.05]
         mkt2          = SimpleMarket irCurve2 hazardRates2
+
+    -- number of intermediate market points
+    let numPoints = 20
 
     -- create cashflows for fixed leg
     -- create credit data notional and recovery rate
     let fixedLegCashFlow = CashFlows [0.05,1,1.5,2] [2,3,4,5]
         creditData       = Credit 10 0.4
-        result'          = evolveLinear fixedLegCashFlow creditData mkt1 mkt2 3
+        result'          = evolveLinear fixedLegCashFlow creditData mkt1 mkt2 numPoints
 
     -- first is either time or dummy time
     let prices      = map thd3 result'
@@ -129,7 +134,7 @@ main =  do
     -- set the dates to their original values
     --let rendererdImg  = map (toRenderable . (pltVectorMkt 1 1) . snd3) result'
     let fs = FillStyleSolid (opaque white)
-    let rendererdImg  = map ( (fillBackground fs) . gridToRenderable . grid ) result''
+    let rendererdImg  = map ( (fillBackground fs) . gridToRenderable . (grid (numPoints + 2))) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 1000 1000
 
