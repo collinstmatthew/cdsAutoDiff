@@ -19,7 +19,8 @@ module Market(SimpleMarket(..),
               diffMarket,
               addMarket,
               divideMarket,
-              plotCurve
+              plotCurve,
+              plotPrice
              ) where
 
 import Types
@@ -30,8 +31,10 @@ import GHC.Generics
 
 import Data.Sort(uniqueSort)
 import Math(dot,difference)
-import Graphics.Gnuplot.Simple
 
+import Graphics.Rendering.Chart.Easy
+
+import Debug.Trace
 
 -- a curve is just time rate points which we can then interpolate however we wish
 data Curve = Curve { _dates :: [Time],
@@ -57,9 +60,29 @@ getVal' curve time  | null together = last ratesG
     ratesG = view rates curve
 
 
-plotCurve :: Curve -> IO ()
-plotCurve c = plotFunc [] (linearScale 1000 (head x,last x)) (getVal' c) where
-    x = view dates c
+plotCurve :: Curve -> Layout Time Rate
+plotCurve c = execEC $ do
+    layout_y_axis . laxis_generate .= scaledAxis def (0,0.1)
+    setColors [opaque black, opaque blue]
+    plot $ line lbl [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
+  where
+    eps = 0.001
+    ss = view dates c
+    -- as we know the curves are constant also plot just before the date
+    ss' =  map (\x->x+eps) ss
+    lbl = "Curve label"
+
+-- # This is just dummy price currently and isn't got properly
+--plotPrice :: [Double] -> Layout Int Price
+--plotPrice :: (PlotValue x, PlotValue y, RealFloat x, Show x) => [y] -> Layout x y
+plotPrice prices = execEC $ do
+    layout_y_axis . laxis_generate .= scaledAxis def (11,13)
+    layout_x_axis . laxis_generate .= scaledAxis def (0,4)
+    setColors [opaque black, opaque blue]
+    plot $ line lbl [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]
+  where
+    -- as we know the curves are constant also plot just before the date
+    lbl = "Curve label"
 
 
 
