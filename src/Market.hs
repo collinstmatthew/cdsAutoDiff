@@ -14,10 +14,12 @@ module Market(SimpleMarket(..),
               integrateCurve,
               nodeDates,
               getVal,
+              getVal',
               yieldCurve,
               diffMarket,
               addMarket,
-              divideMarket
+              divideMarket,
+              plotCurve
              ) where
 
 import Types
@@ -27,9 +29,9 @@ import Numeric.Backprop
 import GHC.Generics
 
 import Data.Sort(uniqueSort)
-
-
 import Math(dot,difference)
+import Graphics.Gnuplot.Simple
+
 
 -- a curve is just time rate points which we can then interpolate however we wish
 data Curve = Curve { _dates :: [Time],
@@ -53,6 +55,13 @@ getVal' curve time  | null together = last ratesG
     together = dropWhile (\x -> (fst x) < time)  $ zip datesG ratesG
     datesG = view dates curve
     ratesG = view rates curve
+
+
+plotCurve :: Curve -> IO ()
+plotCurve c = plotFunc [] (linearScale 1000 (head x,last x)) (getVal' c) where
+    x = view dates c
+
+
 
 -- find the difference of the two curves
 diffCurve :: Curve -> Curve -> Curve

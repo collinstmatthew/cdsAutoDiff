@@ -36,6 +36,7 @@ library
     , fad
     , random-fu
     , statistics
+    , gnuplot
   default-language: Haskell2010
 
 executable bsauto-exe
@@ -55,6 +56,18 @@ executable bsauto-exe
     , random-fu
     , sort
     , statistics
+    , gnuplot
+    , Chart
+    , Chart-cairo
+    , Chart-diagrams
+    , diagrams-lib
+    , diagrams-core
+    , diagrams-cairo
+    , diagrams-svg
+    , colour
+    , data-default-class
+    , cairo
+    , extra
   default-language: Haskell2010
 
 test-suite bsauto-test
