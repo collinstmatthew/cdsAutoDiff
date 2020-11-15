@@ -20,7 +20,8 @@ module Market(SimpleMarket(..),
               addMarket,
               divideMarket,
               plotCurve,
-              plotPrice
+              plotPrice,
+              replaceDates
              ) where
 
 import Types
@@ -138,7 +139,15 @@ integrateCurve forwardRates t = exp (-(dot timesDiff forwardRates')) where
     times'        = 0 : init times
     timesDiff     = difference (Just 0) times
 
+-- takes the dates from the first market and puts them into the second market
+-- commonly used to put the proper dates into a derivatives market
+replaceDates :: SimpleMarket -> SimpleMarket -> SimpleMarket
+replaceDates mkt mktDeriv  = mktDeriv'' where
+    mktDeriv'  = over (irCurve . dates) (const ratesDates) mktDeriv
+    mktDeriv'' = over (hazardRates . dates) (const ratesDates) mktDeriv'
 
+    ratesDates  = view dates . view irCurve $ mkt
+    hazardDates = view dates . view hazardRates $ mkt
 
 nodeDates :: Reifies s W => BVar s SimpleMarket -> [BVar s Time]
 nodeDates mkt = uniqueSort (irDates ++ hazDates) where
