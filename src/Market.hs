@@ -65,6 +65,7 @@ plotCurve name c = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def (0,0.1)
     layout_y_axis  . laxis_title  .= name
     layout_x_axis  . laxis_title  .= "Time"
+    layout_x_axis . laxis_generate .= scaledAxis def (0,2)
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
   where

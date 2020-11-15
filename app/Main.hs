@@ -31,7 +31,9 @@ import qualified  Diagrams.Backend.Cairo.Internal as Int
 import qualified  Diagrams.Backend.Cairo.CmdLine as CmdInt
 import qualified  Diagrams.Prelude as DP
 
-import Graphics.Rendering.Chart.Grid(wideAbove,aboveN,besideN,gridToRenderable,Grid)
+import Graphics.Rendering.Chart.Grid(wideAbove,aboveN,besideN,above,gridToRenderable,Grid,aboveWide,wideAbove,tspan,tval,Span)
+
+import Graphics.Rendering.Chart.Layout(layoutToRenderable)
 
 import Graphics.Rendering.Chart.Backend(FillStyle(..))
 
@@ -69,12 +71,18 @@ chart deri heri =  do
 
 -- Construct a grid of charts, with a single title accross the top
 grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
---grid mktDeriv = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt t r mktDeriv) | t <-ts ] | r <- rs ]
-grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` aboveN [ besideN [ layoutToGrid (pltVectorMkt 1 1 mktDeriv),
-                                                                     layoutToGrid (plotCurve "Interest rates" mktirCurve),
-                                                                     layoutToGrid (plotCurve "Hazard rate" mkthzCurve) ]
-                                                          ,besideN [ layoutToGrid (plotPrice maxTime price) ]   ]
+--grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` above  (besideN [ vectorP,irP, hzP]) priceP
+grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
+--grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` (above irP hzP)
   where
+    --irP = layoutToGrid (plotCurve "Interest rates" mktirCurve)
+    --hzP = layoutToGrid (plotCurve "Hazard rate" mkthzCurve)
+    irP = tspan (layoutToRenderable (plotCurve "Interest rates" mktirCurve)) (1,1)
+    hzP = tspan (layoutToRenderable (plotCurve "Hazard rate" mkthzCurve)) (1,1)
+    --vectorP    = layoutToGrid (pltVectorMkt 1 1 mktDeriv)
+    vectorP    = tspan (layoutToRenderable (pltVectorMkt mktDeriv)) ((1,3))
+    priceP     = tspan (layoutToRenderable (plotPrice maxTime price)) (1,1)
+--    priceP     = layoutToGrid (plotPrice maxTime price)
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
     title = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "CDS sensitivies"
@@ -90,8 +98,8 @@ evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads prices where
 
 
 -- # TODO set the actual dates from the first set of markets
-pltVectorMkt :: Int -> Int -> SimpleMarket -> Layout Rate Rate
-pltVectorMkt d1 d2 mkt = do
+pltVectorMkt :: SimpleMarket -> Layout Rate Rate
+pltVectorMkt mkt = do
     let ratesDerives   = set dates [0.1,0.5,1,1.5,2] $ view (irCurve)     $ mkt
         hazardsDerives = set dates [0.1,0.5,1,1.5,2] $ view (hazardRates) $ mkt
     execEC (chart ratesDerives hazardsDerives)
@@ -136,20 +144,12 @@ main =  do
     let fs = FillStyleSolid (opaque white)
     let rendererdImg  = map ( (fillBackground fs) . gridToRenderable . (grid (numPoints + 2))) result''
 
-    defaultE <- defaultEnv bitmapAlignmentFns 1000 1000
-
+    defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
     --renderToDynamicImage 100 100 rendererdImg
     let z :: [QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultE z) rendererdImg
 
-    -- the numbers here seem to be the quality of the image
-    let ss = mkSizeSpec2D (Just 1000) (Just 1000)
-
-    let finishedG =zip z [1..length z]
-
-    CmdInt.mainWith finishedG
-
-    print $ length finishedG
+    CmdInt.mainWith $ zip z [1..length z]
 
 --    print $ evalBP2 integrateCurve hazardRates 3
 --    print $ result
