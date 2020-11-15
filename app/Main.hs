@@ -36,7 +36,7 @@ main =  do
     -- create credit data notional and recovery rate
     let fixedLegCashFlow = CashFlows [0.05,1,1.5,2] [2,3,4,5]
         creditData       = Credit 10 0.4
-        numPoints = 20
+        numPoints = 2
 
     plotEvolution $ evolveLinear fixedLegCashFlow creditData mkt1 mkt2 numPoints
 

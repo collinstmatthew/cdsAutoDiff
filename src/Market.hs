@@ -60,13 +60,13 @@ getVal' curve time  | null together = last ratesG
     datesG = view dates curve
     ratesG = view rates curve
 
-
-plotCurve :: String -> Curve -> Layout Time Rate
-plotCurve name c = execEC $ do
-    layout_y_axis . laxis_generate .= scaledAxis def (0,0.1)
-    layout_y_axis  . laxis_title  .= name
-    layout_x_axis  . laxis_title  .= "Time"
-    layout_x_axis . laxis_generate .= scaledAxis def (0,2)
+-- #TODO put the maximum and minimum date in as well
+--plotCurve :: String -> Time -> (Rate,Rate) -> Curve -> Layout Time Rate
+plotCurve name maxTenor rateLimits c = execEC $ do
+    layout_y_axis . laxis_generate .= scaledAxis def rateLimits
+    layout_y_axis . laxis_title    .= name
+    layout_x_axis . laxis_title    .= "Time"
+    layout_x_axis . laxis_generate .= scaledAxis def (0,maxTenor)
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
   where
@@ -76,11 +76,12 @@ plotCurve name c = execEC $ do
     ss' =  map (\x->x+eps) ss
 
 -- # This is just dummy price currently and isn't got properly
+-- # TODO put startitng time in instead of o
 plotPrice maxTime prices = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def (11,13)
     layout_x_axis . laxis_generate .= scaledAxis def (0,fromIntegral maxTime)
-    layout_x_axis  . laxis_title  .= "Time"
-    layout_y_axis  . laxis_title  .= "Price"
+    layout_x_axis . laxis_title    .= "Time"
+    layout_y_axis . laxis_title    .= "Price"
 
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]

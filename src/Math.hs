@@ -1,4 +1,4 @@
-module Math(normalCDF,erf,difference,differenceR,dot,m3, genRange) where
+module Math(normalCDF,erf,difference,differenceR,dot,m3, genRange, maximum',minimum') where
 
 --https://www.johndcook.com/blog/2009/01/19/stand-alone-error-function-erf/
 -- implemnentation of error function
@@ -21,6 +21,12 @@ erf x = sign * y where
 normalCDF value = 0.5 * (1-erf (-value * sqrt 0.5 ))
 
 
+minimum' :: Ord a => [a] -> a
+minimum' = foldr1 (\x y ->if x <= y then x else y)
+
+maximum' :: Ord a => [a] -> a
+maximum' = foldr1 (\x y ->if x >= y then x else y)
+
 -- take the difference of a list with a starting elemtn
 difference ::Num a => Maybe a -> [a] -> [a]
 difference (Just begin) l = zipWith (-) l (begin : init l)
@@ -36,6 +42,6 @@ dot x y = sum $ zipWith (*) x y
 m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
 
+-- generage a range between two numbeers
 genRange :: Double -> Double -> Double -> [Double]
 genRange start end gap = takeWhile (< end ) [start + gap*n | n <- [1..]]
-

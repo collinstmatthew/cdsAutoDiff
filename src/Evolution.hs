@@ -3,13 +3,13 @@
 module Evolution(evolveLinear,grid,plotEvolution) where
 
 import Types
-import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates)
+import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates)
 import Trades.CashFlow(CashFlows(..))
 import Trades.CDS(Credit(..),cdsPrice)
 
 import Numeric.Backprop
 
-import Math(genRange)
+import Math(genRange,minimum',maximum')
 
 -- Imports needed for the graph
 import qualified Diagrams.Backend.Cairo.CmdLine as CmdInt
@@ -25,19 +25,31 @@ import Graphics.Rendering.Chart.Easy
 
 import Data.Tuple.Extra
 
-
 evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> [(SimpleMarket,SimpleMarket,Price)]
 evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
-    intermediateMkt  = divideMarket (fromIntegral n) $ diffMarket mktEnd mktStart
+    intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
     allMkts          = take (n+2) $ iterate (addMarket intermediateMkt) mktStart
     prices           = map (evalBP (cdsPrice fl cd)) allMkts
     grads            = map (gradBP (cdsPrice fl cd)) allMkts
     -- replace the dates in the gradient market with the original dates
     grads'           = zipWith replaceDates allMkts grads
 
+limitsIrHaz :: SimpleMarket -> SimpleMarket -> ((Rate,Rate),(Rate,Rate))
+limitsIrHaz mktS mktE = ((minimum' ir, maximum' ir),(minimum' hz, maximum' hz)) where
+    ir = view (irCurve . rates) mktS ++ view (irCurve . rates) mktE
+    hz = view (hazardRates . rates) mktS ++ view (hazardRates . rates) mktE
+
+limitsTimeIrHaz :: SimpleMarket -> SimpleMarket -> Time
+limitsTimeIrHaz mktS mktE =  maximum' (ir ++ hz)  where
+    ir = view (irCurve . dates) mktS ++ view (irCurve . dates) mktE
+    hz = view (hazardRates . dates) mktS ++ view (hazardRates . dates) mktE
 
 -- plots a linear evolugion of a market
 plotEvolution evolution = do
+    -- limits of the rates in the evolution for plotting
+    let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
+    let limitsTenor = limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution))
+
     let numPoints = length evolution
         -- first is either time or dummy time
     let prices      = map thd3 evolution
@@ -45,7 +57,7 @@ plotEvolution evolution = do
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
     let fs           = FillStyleSolid (opaque white)
-        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid numPoints)) result''
+        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid limitsTenor numPoints limits)) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
@@ -89,11 +101,12 @@ chart mkt = do
         plot $ vectorField mkt "" (ef deri heri)
 
 -- Construct a grid of charts, with a single title accross the top
-grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
-grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
+--grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
+grid maxTenor maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
   where
-    irP        = tspan (layoutToRenderable (plotCurve "Interest rates" mktirCurve)) (1,1)
-    hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" mkthzCurve)) (1,1)
+    (irLimits,hzLimits)  = limits
+    irP        = tspan (layoutToRenderable (plotCurve "Interest rates" maxTenor irLimits mktirCurve)) (1,1)
+    hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" maxTenor hzLimits mkthzCurve)) (1,1)
     vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
     priceP     = tspan (layoutToRenderable (plotPrice maxTime price)) (1,1)
     mktirCurve = view irCurve mktOrig
