@@ -1,4 +1,4 @@
-module Math(normalCDF,erf,difference,differenceR,dot,m3) where
+module Math(normalCDF,erf,difference,differenceR,dot,m3, genRange) where
 
 --https://www.johndcook.com/blog/2009/01/19/stand-alone-error-function-erf/
 -- implemnentation of error function
@@ -35,4 +35,7 @@ dot x y = sum $ zipWith (*) x y
 
 m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
+
+genRange :: Double -> Double -> Double -> [Double]
+genRange start end gap = takeWhile (< end ) [start + gap*n | n <- [1..]]
 

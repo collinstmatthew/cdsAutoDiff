@@ -3,11 +3,13 @@
 module Evolution(evolveLinear,grid,plotEvolution) where
 
 import Types
-import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal')
+import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates)
 import Trades.CashFlow(CashFlows(..))
 import Trades.CDS(Credit(..),cdsPrice)
 
 import Numeric.Backprop
+
+import Math(genRange)
 
 -- Imports needed for the graph
 import qualified Diagrams.Backend.Cairo.CmdLine as CmdInt
@@ -43,7 +45,7 @@ plotEvolution evolution = do
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
     let fs           = FillStyleSolid (opaque white)
-        rendererdImg  = map ( (fillBackground fs) . gridToRenderable . (grid numPoints)) result''
+        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid numPoints)) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
@@ -53,31 +55,38 @@ plotEvolution evolution = do
 
 
 -- functions for plotting evolutiton
-square :: [(Rate, Rate)]
-square = [(x,y) | x <- axis, y <- axis] where
-    axis = [ 0.1*x' | x' <- [1..20]]
+-- # TODO what if the tenors are different for irCurve and hazardRates
+-- should probably pass in the pricing date as well
+square :: SimpleMarket -> [(Rate, Rate)]
+square mkt = [(x,y) | x <- axis, y <- axis] where
+    axis = genRange start end 0.1
+    datesC = view (irCurve . dates) mkt
+    start  = head datesC
+    end    = last datesC
 
 ef derivCurve hazardCurve (x,y) = (getVal' derivCurve y,getVal' hazardCurve x)
 
-vectorField title f = fmap plotVectorField $ liftEC $ do
+vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
     plot_vectors_mapf  .= f
     plot_vectors_scale .= 1
-    plot_vectors_grid  .= square
+    plot_vectors_grid  .= square mkt
     plot_vectors_title .= title
     plot_vectors_style . vector_line_style . line_color .= c
     plot_vectors_style . vector_head_style . point_color .= c
 
 chart mkt = do
         let deri = view irCurve mkt
-        let heri = view hazardRates mkt
+            heri = view hazardRates mkt
+        let start = head $ view dates deri
+            end   = last $ view dates deri
         setColors [opaque black, opaque blue]
 --        layout_title .= "Derivatives of cds evolution"
-        layout_y_axis . laxis_generate  .= scaledAxis def (0,2)
+        layout_y_axis . laxis_generate  .= scaledAxis def (start,end)
         layout_y_axis . laxis_title     .= "IR Sensitivites"
-        layout_x_axis . laxis_generate  .= scaledAxis def (0,2)
+        layout_x_axis . laxis_generate  .= scaledAxis def (start,end)
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
-        plot $ vectorField "" (ef deri heri)
+        plot $ vectorField mkt "" (ef deri heri)
 
 -- Construct a grid of charts, with a single title accross the top
 grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
@@ -85,7 +94,7 @@ grid maxTime (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, ab
   where
     irP        = tspan (layoutToRenderable (plotCurve "Interest rates" mktirCurve)) (1,1)
     hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" mkthzCurve)) (1,1)
-    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) ((1,3))
+    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
     priceP     = tspan (layoutToRenderable (plotPrice maxTime price)) (1,1)
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
