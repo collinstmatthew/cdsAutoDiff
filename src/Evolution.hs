@@ -27,12 +27,12 @@ import Data.Tuple.Extra
 
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
 
-evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
-evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
+evolveLinear :: Time -> CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
+evolveLinear pdate fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
     intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
     allMkts          = take (n+2) $ iterate (addMarket intermediateMkt) mktStart
-    prices           = map (evalBP (cdsPrice fl cd)) allMkts
-    grads            = map (gradBP (cdsPrice fl cd)) allMkts
+    prices           = map (evalBP (cdsPrice pdate fl cd)) allMkts
+    grads            = map (gradBP (cdsPrice pdate fl cd)) allMkts
     -- replace the dates in the gradient market with the original dates
     grads'           = zipWith replaceDates allMkts grads
 

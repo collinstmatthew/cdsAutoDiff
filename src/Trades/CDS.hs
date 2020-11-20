@@ -29,29 +29,34 @@ getFHB :: Reifies s W =>  BVar s SimpleMarket -> [BVar s Time] -> ([BVar s Rate]
 getFHB mkt joinDates = (fi,hi,bi) where
     hCurve    = mkt ^^. hazardRates
     iCurve    = mkt ^^. irCurve
-    pi        = map (integrateCurve iCurve) joinDates
-    qi        = map (integrateCurve hCurve) joinDates
+    pDate     = head joinDates
+    pi        = map (integrateCurve iCurve pDate) joinDates
+    qi        = map (integrateCurve hCurve pDate) joinDates
     bi        = zipWith (*) pi qi
     fi        = differenceR Nothing $ map log pi
     hi        = differenceR Nothing $ map log qi
 
 -- computes the discouunt factor of the protecitonLeg
 --protectionLegDF :: Reifies s W => BVar s Market -> BVBar s Rate
-protectionLegDF :: Reifies s W => BVar s SimpleMarket -> BVar s Rate
-protectionLegDF mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
-    diffBi    = differenceR (Just 1) bi
-    joinDates = 0 : nodeDates mkt
-    (fi,hi,bi) = getFHB mkt joinDates
+protectionLegDF :: Reifies s W => Time -> Time -> BVar s SimpleMarket -> BVar s Rate
+protectionLegDF pDate eDate mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
+    -- #TODO strating element as nothing double check this is correct
+    diffBi    = differenceR Nothing bi
+    (fi,hi,bi) = getFHB mkt ([auto pDate] ++ nodeDates pDate mkt ++ [auto eDate])
 
-accruedInterest :: Reifies s W => CashFlows -> BVar s SimpleMarket -> BVar s Price
-accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
+accruedInterest :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
+accruedInterest pDate cf mkt = dot cfQuant (zipWith (*) eta accrP) where
     -- all the cash flow payment dates
-    cfDates  = sequenceVar $ auto cf ^^. cashDates
-    -- cash flow start and end dates
-    cfStartEnd  = zip (0 : init cfDates) cfDates
+    (cfDates',cfQuant') = unzip $ filter (\x -> fst x > pDate) $ zip (view cashDates cf) (view quantity cf)
+
+    cfDates = sequenceVar $ auto cfDates'
+    cfQuant = sequenceVar $ auto cfQuant'
+
+    -- cash flow accrual start and end dates
+    cfStartEnd  = zip ((auto pDate) : init cfDates) cfDates
 
     -- all the mkt not dates joint
-    mktDates = nodeDates mkt
+    mktDates = nodeDates pDate mkt
 
     -- all the market nodes in between coupon start and end dates inclusive
     accrNodes = map accrEx cfStartEnd
@@ -61,7 +66,6 @@ accruedInterest cf mkt = dot quantityCashFlows  (zipWith (*) eta accrP) where
     accrP    = map (helperF mkt) accrNodes
     -- #TODO implement proper day count convention= here/get
     eta      = map (1/) $ difference (Just 0) cfDates
-    quantityCashFlows = sequenceVar $ auto cf ^^. quantity
 
 helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Rate] -> BVar s Price
 helperF mkt dates = sum res  where
@@ -70,11 +74,14 @@ helperF mkt dates = sum res  where
     dti        = difference Nothing dates
     res        = zipWith5 (\f1 h1 b1 db1 dt1 -> (dt1 * h1)/(f1+h1) * (db1/(f1+h1) - b1)) fi hi bi diffBi dti
 
-cdsPrice :: Reifies s W => CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
-cdsPrice cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
-    couponLeg = cashFlowValue cashFlows mkt
-    aI = accruedInterest cashFlows mkt
-    defaultLeg = notional' * (1-rr) * protectionLegDF mkt where
+cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
+cdsPrice pDate cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
+    couponLeg = cashFlowValue pDate cashFlows mkt
+    --take end date to be last coupon payment
+    eDate = last $ view cashDates cashFlows
+
+    aI = accruedInterest pDate cashFlows mkt
+    defaultLeg = notional' * (1-rr) * protectionLegDF pDate eDate mkt where
         notional'  = cD ^^. notional
         rr   = cD ^^. recoveryRate
         cD   = auto creditData

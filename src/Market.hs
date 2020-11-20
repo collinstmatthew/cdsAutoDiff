@@ -129,16 +129,22 @@ divideMarket m mkt = SimpleMarket ir hc where
 -- take forward rates and gives a discount factor back
 -- assums forward rates are piecewise constant
 -- careful dot doesn't show error if sizes are difference
-integrateCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
-integrateCurve forwardRates t = exp (-(dot timesDiff forwardRates')) where
-    forwardRates' = take (length times) (addDummy (sequenceVar (forwardRates ^^. rates) ))
+integrateCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Time -> BVar s Rate
+integrateCurve forwardRates pDate eDate = exp (-(dot timesDiff forwardRates')) where
+    forwardRates' = take (length times) (addDummy ratesH')
     -- ensure if t is past the last node then add a dummy rate at the end
-    addDummy x    = if t > last datesH then x ++ [last x] else x
+    addDummy x    = if eDate > last datesH then x ++ [last x] else x
     datesH        = sequenceVar $ forwardRates ^^. dates
-    times         = filteredT ++ [t]
-    filteredT     = filter (t >) datesH
-    times'        = 0 : init times
-    timesDiff     = difference (Just 0) times
+    ratesH        = sequenceVar $ forwardRates ^^. rates
+
+
+    times         = filteredT ++ [eDate]
+    -- filter all times that are bigger than termination time and smaller than start time
+    (filteredT,ratesH') = unzip $ filter (\x -> eDate > fst x && fst x > pDate) $ zip datesH ratesH
+    -- do the same filtering to the given rates
+
+    times'        = pDate : init times
+    timesDiff     = difference (Just pDate) times
 
 -- takes the dates from the first market and puts them into the second market
 -- commonly used to put the proper dates into a derivatives market
@@ -150,8 +156,11 @@ replaceDates mkt mktDeriv  = mktDeriv'' where
     ratesDates  = view dates . view irCurve $ mkt
     hazardDates = view dates . view hazardRates $ mkt
 
-nodeDates :: Reifies s W => BVar s SimpleMarket -> [BVar s Time]
-nodeDates mkt = uniqueSort (irDates ++ hazDates) where
+nodeDates :: Reifies s W => Time -> BVar s SimpleMarket -> [BVar s Time]
+nodeDates pDate mkt = (uniqueSort uNdate)  where
+    uNdate = filter (\x -> x > pDate') (irDates ++ hazDates)
+    pDate' = auto pDate
+
     hCurve    = mkt ^^. hazardRates
     iCurve    = mkt ^^. irCurve
     hazDates  = sequenceVar $ hCurve ^^. dates
