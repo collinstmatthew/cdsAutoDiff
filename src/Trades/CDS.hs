@@ -65,13 +65,13 @@ accruedInterest pDate cf mkt = dot cfQuant (zipWith (*) eta accrP) where
     -- sum over each period then will do product this with eta and multiply by coupon to get result
     accrP    = map (helperF mkt) accrNodes
     -- #TODO implement proper day count convention= here/get
-    eta      = map (1/) $ difference (Just 0) cfDates
+    eta      = map (1/) $ differenceDay (Just (auto pDate)) ACT365F cfDates
 
-helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Rate] -> BVar s Price
+helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Time] -> BVar s Price
 helperF mkt dates = sum res  where
     (fi,hi,bi) = getFHB mkt dates
     diffBi     = differenceR Nothing bi
-    dti        = difference Nothing dates
+    dti        = differenceDay Nothing ACT365F dates
     res        = zipWith5 (\f1 h1 b1 db1 dt1 -> (dt1 * h1)/(f1+h1) * (db1/(f1+h1) - b1)) fi hi bi diffBi dti
 
 cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price

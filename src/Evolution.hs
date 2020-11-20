@@ -3,7 +3,7 @@
 module Evolution(evolveLinear,grid,plotEvolution) where
 
 import Types
-import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates)
+import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
 import Trades.CashFlow(CashFlows(..))
 import Trades.CDS(Credit(..),cdsPrice)
 
@@ -25,6 +25,8 @@ import Graphics.Rendering.Chart.Easy
 
 import Data.Tuple.Extra
 
+import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
+
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
 
 evolveLinear :: Time -> CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
@@ -41,8 +43,8 @@ limitsIrHaz mktS mktE = ((minimum' ir, maximum' ir),(minimum' hz, maximum' hz)) 
     ir = view (irCurve . rates) mktS ++ view (irCurve . rates) mktE
     hz = view (hazardRates . rates) mktS ++ view (hazardRates . rates) mktE
 
-limitsTimeIrHaz :: SimpleMarket -> SimpleMarket -> Time
-limitsTimeIrHaz mktS mktE =  maximum' (ir ++ hz)  where
+limitsTimeIrHaz :: SimpleMarket -> SimpleMarket -> (Time,Time)
+limitsTimeIrHaz mktS mktE = (minimum' (ir ++ hz), maximum' (ir ++ hz))  where
     ir = view (irCurve . dates) mktS ++ view (irCurve . dates) mktE
     hz = view (hazardRates . dates) mktS ++ view (hazardRates . dates) mktE
 
@@ -50,7 +52,7 @@ limitsTimeIrHaz mktS mktE =  maximum' (ir ++ hz)  where
 plotEvolution evolution = do
     -- limits of the rates in the evolution for plotting
     let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
-    let limitsTenor = limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution))
+    let tenorLimits = limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution))
 
     let numPoints = length evolution
         -- first is either time or dummy time
@@ -60,7 +62,7 @@ plotEvolution evolution = do
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
     let fs           = FillStyleSolid (opaque white)
-        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid priceLims limitsTenor numPoints limits)) result''
+        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid priceLims tenorLimits numPoints limits)) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
@@ -72,14 +74,15 @@ plotEvolution evolution = do
 -- functions for plotting evolutiton
 -- # TODO what if the tenors are different for irCurve and hazardRates
 -- should probably pass in the pricing date as well
-square :: SimpleMarket -> [(Rate, Rate)]
+square :: SimpleMarket -> [(Double, Double)]
 square mkt = [(x,y) | x <- axis, y <- axis] where
-    axis = genRange start end 0.1
+    axis = genRange start end 10
     datesC = view (irCurve . dates) mkt
-    start  = head datesC
-    end    = last datesC
+    start  = fromInteger . toModifiedJulianDay $  head datesC
+    end    = fromInteger . toModifiedJulianDay $ last datesC
 
-ef derivCurve hazardCurve (x,y) = (getVal' derivCurve y,getVal' hazardCurve x)
+ef :: Curve -> Curve -> (Double,Double) -> (Double,Double)
+ef derivCurve hazardCurve (x,y) = (getVal' derivCurve (ModifiedJulianDay (round y)),getVal' hazardCurve (ModifiedJulianDay (round x)))
 
 vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
@@ -93,8 +96,8 @@ vectorField mkt title f = fmap plotVectorField $ liftEC $ do
 chart mkt = do
         let deri = view irCurve mkt
             heri = view hazardRates mkt
-        let start = head $ view dates deri
-            end   = last $ view dates deri
+        let start = fromInteger .toModifiedJulianDay $ head $ view dates deri
+            end   = fromInteger . toModifiedJulianDay $ last $ view dates deri
         setColors [opaque black, opaque blue]
 --        layout_title .= "Derivatives of cds evolution"
         layout_y_axis . laxis_generate  .= scaledAxis def (start,end)
@@ -105,11 +108,11 @@ chart mkt = do
 
 -- Construct a grid of charts, with a single title accross the top
 --grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
-grid pricelims maxTenor maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
+grid pricelims tenorLimits maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
   where
     (irLimits,hzLimits)  = limits
-    irP        = tspan (layoutToRenderable (plotCurve "Interest rates" maxTenor irLimits mktirCurve)) (1,1)
-    hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" maxTenor hzLimits mkthzCurve)) (1,1)
+    irP        = tspan (layoutToRenderable (plotCurve "Interest rates" tenorLimits irLimits mktirCurve)) (1,1)
+    hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" tenorLimits hzLimits mkthzCurve)) (1,1)
     vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
     priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
     mktirCurve = view irCurve mktOrig

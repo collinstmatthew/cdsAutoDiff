@@ -43,5 +43,5 @@ m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
 
 -- generage a range between two numbeers
-genRange :: Double -> Double -> Double -> [Double]
+--genRange :: Double -> Double -> Double -> [Double]
 genRange start end gap = takeWhile (< end ) [start + gap*n | n <- [1..]]

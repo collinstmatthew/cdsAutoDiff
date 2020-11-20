@@ -25,17 +25,14 @@ module Market(SimpleMarket(..),
              ) where
 
 import Types
-
 import Control.Lens
 import Numeric.Backprop
 import GHC.Generics
-
 import Data.Sort(uniqueSort)
 import Math(dot,difference)
-
 import Graphics.Rendering.Chart.Easy
 
-import Debug.Trace
+import Data.Time.Calendar(addDays,toModifiedJulianDay)
 
 -- a curve is just time rate points which we can then interpolate however we wish
 data Curve = Curve { _dates :: [Time],
@@ -44,6 +41,10 @@ data Curve = Curve { _dates :: [Time],
 
 instance Backprop Curve
 makeLenses ''Curve
+
+
+mapTuple :: (a -> b) -> (a, a) -> (b, b)
+mapTuple f (a1, a2) = (f a1, f a2)
 
 
 nodeDates' :: Curve -> Curve -> [Time]
@@ -61,19 +62,19 @@ getVal' curve time  | null together = last ratesG
     ratesG = view rates curve
 
 -- #TODO put the maximum and minimum date in as well
---plotCurve :: String -> Time -> (Rate,Rate) -> Curve -> Layout Time Rate
-plotCurve name maxTenor rateLimits c = execEC $ do
+plotCurve :: String -> (Time,Time) -> (Rate,Rate) -> Curve -> Layout Double Rate
+plotCurve name tenorLimits rateLimits c = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def rateLimits
     layout_y_axis . laxis_title    .= name
     layout_x_axis . laxis_title    .= "Time"
-    layout_x_axis . laxis_generate .= scaledAxis def (0,maxTenor)
+    layout_x_axis . laxis_generate .= scaledAxis def (mapTuple (fromIntegral .toModifiedJulianDay) tenorLimits)
     setColors [opaque black, opaque blue]
-    plot $ line "" [  [(s,getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
+    plot $ line "" [  [(fromIntegral (toModifiedJulianDay s),getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
   where
-    eps = 0.001
+    eps::Integer = 1
     ss = view dates c
     -- as we know the curves are constant also plot just before the date
-    ss' =  map (\x->x+eps) ss
+    ss' =  map (addDays eps) ss
 
 -- # This is just dummy price currently and isn't got properly
 -- # TODO put startitng time in instead of o
@@ -144,7 +145,7 @@ integrateCurve forwardRates pDate eDate = exp (-(dot timesDiff forwardRates')) w
     -- do the same filtering to the given rates
 
     times'        = pDate : init times
-    timesDiff     = difference (Just pDate) times
+    timesDiff     = differenceDay (Just pDate) ACT365F times
 
 -- takes the dates from the first market and puts them into the second market
 -- commonly used to put the proper dates into a derivatives market

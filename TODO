@@ -1,14 +1,14 @@
-add in start date instead of 0 will need to divide by this discouunt factor in more place now as well then
+add in start date as a number
+  -- first for cashflows
+  -- then for accrual
+  -- then for dates
 
-move accrued interest into cash flow function
+transform everything from doubles to actual dates
 
-use the getVal function on the curve and this should clean things up a bit
+generate schedules from tenors and termination date
 
-implement proper day couunt convention
+implement the date count conventions propely with dates
 
-make Curves Mondoids so we can take the difference of them etc
-also allow curve to be multipled by a scalar, correct structure for this?
+allow the curve to evolve along proper time and not just dummy time
 
-Then make marketes monoids
-And also allow scalar multiplication by a number
-
+allow hazard rates to either move with time or stay constant.
