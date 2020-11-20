@@ -25,7 +25,9 @@ import Graphics.Rendering.Chart.Easy
 
 import Data.Tuple.Extra
 
-evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> [(SimpleMarket,SimpleMarket,Price)]
+type Evolution = [(SimpleMarket,SimpleMarket,Price)]
+
+evolveLinear :: CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
 evolveLinear fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
     intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
     allMkts          = take (n+2) $ iterate (addMarket intermediateMkt) mktStart
@@ -53,11 +55,12 @@ plotEvolution evolution = do
     let numPoints = length evolution
         -- first is either time or dummy time
     let prices      = map thd3 evolution
+        priceLims   = (minimum prices, maximum prices)
         pricesAccum = map (\a -> take a prices) [1..length evolution]
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
     let fs           = FillStyleSolid (opaque white)
-        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid limitsTenor numPoints limits)) result''
+        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid priceLims limitsTenor numPoints limits)) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
@@ -102,13 +105,13 @@ chart mkt = do
 
 -- Construct a grid of charts, with a single title accross the top
 --grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
-grid maxTenor maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
+grid pricelims maxTenor maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
   where
     (irLimits,hzLimits)  = limits
     irP        = tspan (layoutToRenderable (plotCurve "Interest rates" maxTenor irLimits mktirCurve)) (1,1)
     hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" maxTenor hzLimits mkthzCurve)) (1,1)
     vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
-    priceP     = tspan (layoutToRenderable (plotPrice maxTime price)) (1,1)
+    priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
     title      = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "CDS sensitivies"

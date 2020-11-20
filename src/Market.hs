@@ -15,7 +15,7 @@ module Market(SimpleMarket(..),
               nodeDates,
               getVal,
               getVal',
-              yieldCurve,
+--              yieldCurve,
               diffMarket,
               addMarket,
               divideMarket,
@@ -77,8 +77,8 @@ plotCurve name maxTenor rateLimits c = execEC $ do
 
 -- # This is just dummy price currently and isn't got properly
 -- # TODO put startitng time in instead of o
-plotPrice maxTime prices = execEC $ do
-    layout_y_axis . laxis_generate .= scaledAxis def (11,13)
+plotPrice priceLimits maxTime prices = execEC $ do
+    layout_y_axis . laxis_generate .= scaledAxis def priceLimits
     layout_x_axis . laxis_generate .= scaledAxis def (0,fromIntegral maxTime)
     layout_x_axis . laxis_title    .= "Time"
     layout_y_axis . laxis_title    .= "Price"
@@ -166,5 +166,6 @@ getVal curve time   | null together = last ratesG
     ratesG = sequenceVar (curve ^^. rates)
 
 -- gets the yield instead of the discouunt factor
-yieldCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Rate
-yieldCurve forwardRates t = (1/t) * log (integrateCurve forwardRates t)
+-- #TODO implement pricing date
+--yieldCurve :: Reifies s W => Time -> BVar s Curve -> BVar s Time -> BVar s Rate
+--yieldCurve pd forwardRates t = (1/t) * log (integrateCurve pd forwardRates t)
