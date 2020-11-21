@@ -27,12 +27,9 @@ import Data.Tuple.Extra
 
 import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
 
-
 import Debug.Trace
 
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
-
-
 
 evolveLinear :: Time -> CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
 evolveLinear pdate fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
@@ -81,7 +78,7 @@ plotEvolution evolution = do
 -- should probably pass in the pricing date as well
 square :: SimpleMarket -> [(Double, Double)]
 square mkt = [(x,y) | x <- axis, y <- axis] where
-    axis = genRange start end 10
+    axis = genRange start end 50
     datesC = view (irCurve . dates) mkt
     start  = fromInteger . toModifiedJulianDay $  head datesC
     end    = fromInteger . toModifiedJulianDay $ last datesC

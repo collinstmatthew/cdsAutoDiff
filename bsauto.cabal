@@ -26,6 +26,14 @@ source-repository head
   location: https://github.com/githubuser/bsauto
 
 library
+  exposed-modules:
+      Market,
+      Math,
+      Types,
+      Trades.CashFlow,
+      Trades.CDS,
+      Trades.CallOption,
+      Evolution
   other-modules:
       Paths_bsauto
   hs-source-dirs:
@@ -36,8 +44,18 @@ library
     , fad
     , random-fu
     , statistics
+    , lens
     , gnuplot
     , time
+    , backprop
+    , sort
+    , Chart
+    , Chart-cairo
+    , Chart-diagrams
+    , extra
+    , diagrams-core
+    , diagrams-cairo
+    , diagrams-lib
   default-language: Haskell2010
 
 executable bsauto-exe

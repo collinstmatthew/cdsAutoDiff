@@ -16,6 +16,8 @@ import Types
 import Market(SimpleMarket,integrateCurve,hazardRates,irCurve)
 import Math(m3)
 
+import Debug.Trace
+
 data CashFlows = CashFlows { _cashDates :: [Time],
                              _quantity  :: [Price] } deriving (Show, Generic)
 
@@ -31,15 +33,13 @@ cutStart l1 l2 = drop nD l2 where
 -- Takes a curve a sums all the points on it dummy functional on curve
 cashFlowValue :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
 cashFlowValue pDate cashflows mkt = discounted where
-        -- setup so we only consider future cashflows filter out all earlier ones
-        cashflows'        = over cashDates (filter (pDate >=)) cashflows
-        cashflows''       = over quantity (cutStart (view cashDates cashflows)) cashflows
+        (cfDates,cfQuant) = unzip $ filter(\x-> fst x >= pDate)$ zip (view cashDates cashflows) (view quantity cashflows)
 
         -- get cash flow times and discouunt and survival factors
-        timesCashFlows    = sequenceVar $ auto cashflows'' ^^. cashDates
+        timesCashFlows    = sequenceVar $ auto cfDates
         survivalProbs     = map (integrateCurve (mkt ^^. hazardRates) (auto pDate)) timesCashFlows
         discountFact      = map (integrateCurve (mkt ^^. irCurve) (auto pDate)) timesCashFlows
 
         -- return final value of discounted cash flows
-        quantityCashFlows = sequenceVar $ auto cashflows'' ^^. quantity
+        quantityCashFlows = sequenceVar $ auto cfQuant
         discounted        = sum $ zipWith3 m3 discountFact quantityCashFlows survivalProbs

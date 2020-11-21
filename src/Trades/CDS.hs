@@ -87,6 +87,7 @@ helperF mkt dates = sum res  where
     res        = zipWith5 (\f1 h1 b1 db1 dt1 -> (dt1 * h1)/(f1+h1) * (db1/(f1+h1) - b1)) fi hi bi diffBi dti
 
 cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
+--cdsPrice pDate cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
 cdsPrice pDate cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
     couponLeg = cashFlowValue pDate cashFlows mkt
     --take end date to be last coupon payment

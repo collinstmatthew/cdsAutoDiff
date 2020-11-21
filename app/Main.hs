@@ -7,7 +7,7 @@ module Main where
 import Market(SimpleMarket(..),Curve(..),irCurve,hazardRates,rates,dates,integrateCurve'')
 import Trades.CallOption(callPrice,ModelParams(..))
 import Trades.CDS(Credit(..),protectionLegDF,accruedInterest)
-import Trades.CashFlow(CashFlows(..))
+import Trades.CashFlow(CashFlows(..),cashFlowValue)
 
 import Types
 import Evolution(evolveLinear,plotEvolution)
@@ -31,8 +31,8 @@ main =  do
         hazardRates1  = Curve tenorDates [0.02,0.025,0.03,0.035,0.04]
         mkt1          = SimpleMarket irCurve1 hazardRates1
 
-    let irCurve2      = Curve tenorDates [0.02,0.02,0.02,0.02,0.02]
-        hazardRates2  = Curve tenorDates [0.02,0.025,0.03,0.035,0.04]
+    let irCurve2      = Curve tenorDates [0.08,0.06,0.06,0.1,0.18]
+        hazardRates2  = Curve tenorDates [0.01,0.015,0.02,0.025,0.03]
         mkt2          = SimpleMarket irCurve2 hazardRates2
 
     -- number of intermediate market points
@@ -44,24 +44,19 @@ main =  do
     -- current it is just the pricing date
     -- Similarly the termidnation date is just the last coupon date
     --
-    let fixedLegCashFlow = CashFlows tenorDates [0.1,0.1,0.1,0.1,0.1]
+    let fixedLegCashFlow = CashFlows tenorDates [1,1,1,1,1]
         --creditData       = Credit 10 0.4
         creditData       = Credit 10 0.4
         numPoints = 1
 
-    let pricingDate = fromGregorian 2018 9 12
+    --let pricingDate = fromGregorian 2018 9 12
+    let pricingDate = fromGregorian 2019 10 16
 
-    --print $ tenorDates
-    --print $ map (integrateCurve'' irCurve1 pricingDate) tenorDates
-    --print $ integrateCurve'' irCurve1 pricingDate pricingDate
-
-    --print $ evalBP (accruedInterest pricingDate fixedLegCashFlow) mkt1
+    print $ tenorDates
+    --print $ integrateCurve'' irCurve1 pricingDate (tenorDates!!0)
+    --print $ map (integrateCurve'' hazardRates1 pricingDate) tenorDates
+--    print $ evalBP (cashFlowValue pricingDate fixedLegCashFlow) mkt1
 
     plotEvolution $ evolveLinear pricingDate fixedLegCashFlow creditData mkt1 mkt2 numPoints
 
-
-
---    print $ evalBP2 integrateCurve hazardRates 3
---    print $ result
---    print $ evolveLinear fixedLegCashFlow creditData mkt
     print "finished"
