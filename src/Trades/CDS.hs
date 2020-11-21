@@ -42,7 +42,7 @@ getFHB :: Reifies s W =>  BVar s SimpleMarket -> [BVar s Time] -> ([BVar s Rate]
 getFHB mkt joinDates = (fi,hi,bi) where
     hCurve    = mkt ^^. hazardRates
     iCurve    = mkt ^^. irCurve
-    -- #TODO this should be the effective date but is currently just the pricing date
+
     pDate     = head joinDates
 
     -- these need to be calculated from i=0 to i = n
@@ -53,20 +53,18 @@ getFHB mkt joinDates = (fi,hi,bi) where
     hi        = differenceR Nothing $ map log qi
 
 -- computes the discouunt factor of the protecitonLeg
-protectionLegDF :: Reifies s W => Time -> Time -> Time -> BVar s SimpleMarket -> BVar s Rate
-protectionLegDF pDate effDate endDate mkt = (*) eDateDiscount   $ sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
-    eDateDiscount = 1.0 / (integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effDate))
-
+protectionLegDF :: Reifies s W => Time -> Time -> BVar s SimpleMarket -> BVar s Rate
+protectionLegDF pDate endDate mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
     diffBi     = differenceR Nothing bi
     -- # startDate is actually difference to the pricing date on the cds
-    lDates     =  nodeDates effDate endDate mkt
+    lDates     =  nodeDates pDate endDate mkt
 
     -- fi and hi should be from i=1 to n
     -- bi should be from i=0 to n
     (fi,hi,bi) =  getFHB mkt lDates
 
-accruedInterest :: Reifies s W => Time -> Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
-accruedInterest pDate effDate cf mkt = eDateDiscount  * (dot cfQuant (zipWith (*) eta accrP)) where
+accruedInterest :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
+accruedInterest pDate cf mkt =  (dot cfQuant (zipWith (*) eta accrP)) where
     -- all the cash flow payment dates
     (cfDates',cfQuant') = unzip $ filter (\x -> fst x > pDate) $ zip (view cashDates cf) (view quantity cf)
 
@@ -74,13 +72,11 @@ accruedInterest pDate effDate cf mkt = eDateDiscount  * (dot cfQuant (zipWith (*
     cfQuant = sequenceVar $ auto cfQuant'
 
     -- cash flow accrual start and end dates
-    cfStartEnd  = zip ((auto effDate) : init cfDates) cfDates
+    cfStartEnd  = zip ((auto pDate) : init cfDates) cfDates
 
     endDate = last cfDates'
-    --effective date discount factor
-    eDateDiscount = 1.0 / (integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effDate))
     -- all the mkt not dates joint
-    mktDates = nodeDates effDate endDate mkt
+    mktDates = nodeDates pDate endDate mkt
 
     -- all the market nodes in between coupon start and end dates inclusive
     accrNodes = map accrEx cfStartEnd
@@ -89,7 +85,7 @@ accruedInterest pDate effDate cf mkt = eDateDiscount  * (dot cfQuant (zipWith (*
     -- sum over each period then will do product this with eta and multiply by coupon to get result
     accrP    = map (helperF mkt) accrNodes
     -- #TODO implement proper day count convention= here/get
-    eta      = map (1/) $ differenceDay (Just (auto effDate)) ACT365F cfDates
+    eta      = map (1/) $ differenceDay (Just (auto pDate)) ACT365F cfDates
 
 helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Time] -> BVar s Price
 helperF mkt dates = sum res  where
@@ -101,16 +97,19 @@ helperF mkt dates = sum res  where
 --cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
 cdsPrice :: Reifies s W => Time -> CDS -> BVar s SimpleMarket -> BVar s Price
 --cdsPrice pDate cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
-cdsPrice pDate cds mkt = couponLeg - aI  - defaultLeg where
+cdsPrice pDate cds mkt = eDateDiscount * (couponLeg - aI  - defaultLeg) where
     cashFlows = view premiumLeg cds
     creditData = view creditDetails cds
-    effD = view effective cds
-    couponLeg = cashFlowValue pDate effD cashFlows mkt
+    effD = max (view effective cds) pDate
+    couponLeg = cashFlowValue effD cashFlows mkt
     --take end date to be last coupon payment
     endDate = last $ view cashDates cashFlows
 
-    aI = accruedInterest pDate effD cashFlows mkt
-    defaultLeg = notional' * (1-rr) * protectionLegDF pDate effD endDate mkt where
+    -- discount from effective date to pricing date
+    eDateDiscount = 1.0 / (integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effD))
+
+    aI = accruedInterest effD cashFlows mkt
+    defaultLeg = notional' * (1-rr) * protectionLegDF effD endDate mkt where
         notional'  = cD ^^. notional
         rr   = cD ^^. recoveryRate
         cD   = auto creditData
