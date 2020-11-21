@@ -12,6 +12,7 @@ module Market(SimpleMarket(..),
               irCurve,
               hazardRates,
               integrateCurve,
+              integrateCurve'',
               nodeDates,
               getVal,
               getVal',
@@ -33,6 +34,8 @@ import Math(dot,difference)
 import Graphics.Rendering.Chart.Easy
 
 import Data.Time.Calendar(addDays,toModifiedJulianDay)
+
+import Debug.Trace
 
 -- a curve is just time rate points which we can then interpolate however we wish
 data Curve = Curve { _dates :: [Time],
@@ -67,7 +70,7 @@ plotCurve name tenorLimits rateLimits c = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def rateLimits
     layout_y_axis . laxis_title    .= name
     layout_x_axis . laxis_title    .= "Time"
-    layout_x_axis . laxis_generate .= scaledAxis def (mapTuple (fromIntegral .toModifiedJulianDay) tenorLimits)
+    layout_x_axis . laxis_generate .= scaledAxis def timeLimits
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(fromIntegral (toModifiedJulianDay s),getVal' c s) | s <- uniqueSort (ss ++ ss')] ]
   where
@@ -75,6 +78,7 @@ plotCurve name tenorLimits rateLimits c = execEC $ do
     ss = view dates c
     -- as we know the curves are constant also plot just before the date
     ss' =  map (addDays eps) ss
+    timeLimits = (mapTuple (fromIntegral .toModifiedJulianDay) tenorLimits)
 
 -- # This is just dummy price currently and isn't got properly
 -- # TODO put startitng time in instead of o
@@ -127,25 +131,47 @@ divideMarket m mkt = SimpleMarket ir hc where
     ir = divideCurve m (view irCurve mkt)
     hc = divideCurve m (view hazardRates mkt)
 
+myDot :: Reifies s W => [BVar s Double] -> [BVar s Double] -> BVar s Double
+myDot l1 l2 = if length l1 == length l2 then dot l1 l2 else error "Lists not equal"
+
 -- take forward rates and gives a discount factor back
 -- assums forward rates are piecewise constant
 -- careful dot doesn't show error if sizes are difference
 integrateCurve :: Reifies s W => BVar s Curve -> BVar s Time -> BVar s Time -> BVar s Rate
-integrateCurve forwardRates pDate eDate = exp (-(dot timesDiff forwardRates')) where
-    forwardRates' = take (length times) (addDummy ratesH')
-    -- ensure if t is past the last node then add a dummy rate at the end
-    addDummy x    = if eDate > last datesH then x ++ [last x] else x
+integrateCurve forwardRates pDate eDate = exp (-(myDot timesDiff ratesH'')) where
     datesH        = sequenceVar $ forwardRates ^^. dates
     ratesH        = sequenceVar $ forwardRates ^^. rates
 
+    -- if the end time is past the last market node add on a dummy node
+    (datesH',ratesH')= if eDate > last datesH then (datesH ++ [eDate], ratesH ++ [last ratesH])    else (datesH, ratesH)
 
-    times         = filteredT ++ [eDate]
-    -- filter all times that are bigger than termination time and smaller than start time
-    (filteredT,ratesH') = unzip $ filter (\x -> eDate > fst x && fst x > pDate) $ zip datesH ratesH
+    dateJB =  if null fL then eDate else head fL where
+        fL = filter (>= eDate) datesH
+
+    -- filter all times that are bigger than  than start time and smaller than or equal end time
+    (filteredT,ratesH'') =unzip $ filter (\x ->fst x <= dateJB && fst x >= pDate) $ zip datesH ratesH
+
+    timesDiff     = differenceDay (Just pDate) ACT365F (init filteredT ++ [eDate])
+
+integrateCurve'' :: Curve -> Time -> Time -> Rate
+integrateCurve'' forwardRates pDate eDate = exp (-(dot timesDiff ratesH'')) where
+    datesH        = view dates forwardRates
+    ratesH        = view rates forwardRates
+
+    -- if the end time is past the last market node add on a dummy node
+    (datesH',ratesH')= if eDate > last datesH then (datesH ++ [eDate], ratesH ++ [last ratesH])    else (datesH, ratesH)
+
+    -- get the node just past the end date
+    dateJB =  if null fL then eDate else head fL where
+        fL = filter (>= eDate) datesH
+
+    -- filter all rates that are bigger than start time and smaller than end
+    (filteredT,ratesH'') =unzip $ filter (\x ->fst x <= dateJB && fst x > pDate) $ zip datesH ratesH
     -- do the same filtering to the given rates
 
-    times'        = pDate : init times
-    timesDiff     = differenceDay (Just pDate) ACT365F times
+    timesDiff     = differenceDay' (Just pDate) ACT365F (init filteredT ++ [eDate])
+
+
 
 -- takes the dates from the first market and puts them into the second market
 -- commonly used to put the proper dates into a derivatives market
@@ -157,10 +183,11 @@ replaceDates mkt mktDeriv  = mktDeriv'' where
     ratesDates  = view dates . view irCurve $ mkt
     hazardDates = view dates . view hazardRates $ mkt
 
-nodeDates :: Reifies s W => Time -> BVar s SimpleMarket -> [BVar s Time]
-nodeDates pDate mkt = (uniqueSort uNdate)  where
-    uNdate = filter (\x -> x > pDate') (irDates ++ hazDates)
+nodeDates :: Reifies s W => Time -> Time -> BVar s SimpleMarket -> [BVar s Time]
+nodeDates pDate eDate mkt = uniqueSort ([pDate'] ++ uNdate ++ [eDate'])  where
+    uNdate = filter (\x -> x > pDate' && x < eDate'  ) (irDates ++ hazDates)
     pDate' = auto pDate
+    eDate' = auto eDate
 
     hCurve    = mkt ^^. hazardRates
     iCurve    = mkt ^^. irCurve

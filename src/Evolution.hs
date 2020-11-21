@@ -27,7 +27,12 @@ import Data.Tuple.Extra
 
 import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
 
+
+import Debug.Trace
+
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
+
+
 
 evolveLinear :: Time -> CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
 evolveLinear pdate fl cd mktStart mktEnd n = zip3 allMkts grads' prices where

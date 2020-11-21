@@ -3,6 +3,12 @@ add in start date as a number
   -- then for accrual
   -- then for dates
 
+is the way the accrued payments current calculated assuming that all the cashflow payments are the same
+
+
+
+getting nan for prices something going wrong in the getFHB function look through the log
+
 transform everything from doubles to actual dates
 
 generate schedules from tenors and termination date

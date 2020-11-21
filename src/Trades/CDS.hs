@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Trades.CDS(Credit(..),cdsPrice) where
+module Trades.CDS(Credit(..),cdsPrice, protectionLegDF,accruedInterest ) where
 
 import Numeric.Backprop
 import Control.Lens
@@ -16,6 +16,9 @@ import Trades.CashFlow(CashFlows(..),cashDates,quantity,cashFlowValue)
 import Types
 import Math(difference,differenceR,dot)
 import Data.List(zipWith5)
+import Data.Sort(uniqueSort)
+
+import Debug.Trace
 
 data Credit = Credit { _notional :: Double,
                       _recoveryRate :: Double} deriving (Show, Generic)
@@ -29,7 +32,10 @@ getFHB :: Reifies s W =>  BVar s SimpleMarket -> [BVar s Time] -> ([BVar s Rate]
 getFHB mkt joinDates = (fi,hi,bi) where
     hCurve    = mkt ^^. hazardRates
     iCurve    = mkt ^^. irCurve
+    -- #TODO this should be the effective date but is currently just the pricing date
     pDate     = head joinDates
+
+    -- these need to be calculated from i=0 to i = n
     pi        = map (integrateCurve iCurve pDate) joinDates
     qi        = map (integrateCurve hCurve pDate) joinDates
     bi        = zipWith (*) pi qi
@@ -37,12 +43,16 @@ getFHB mkt joinDates = (fi,hi,bi) where
     hi        = differenceR Nothing $ map log qi
 
 -- computes the discouunt factor of the protecitonLeg
---protectionLegDF :: Reifies s W => BVar s Market -> BVBar s Rate
 protectionLegDF :: Reifies s W => Time -> Time -> BVar s SimpleMarket -> BVar s Rate
-protectionLegDF pDate eDate mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
+protectionLegDF pDate eDate mkt =  sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
     -- #TODO strating element as nothing double check this is correct
-    diffBi    = differenceR Nothing bi
-    (fi,hi,bi) = getFHB mkt ([auto pDate] ++ nodeDates pDate mkt ++ [auto eDate])
+    diffBi     = differenceR Nothing bi
+    -- # startDate is actually difference to the pricing date on the cds
+    lDates     =  nodeDates pDate eDate mkt
+
+    -- fi and hi should be from i=1 to n
+    -- bi should be from i=0 to n
+    (fi,hi,bi) =  getFHB mkt lDates
 
 accruedInterest :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
 accruedInterest pDate cf mkt = dot cfQuant (zipWith (*) eta accrP) where
@@ -55,8 +65,10 @@ accruedInterest pDate cf mkt = dot cfQuant (zipWith (*) eta accrP) where
     -- cash flow accrual start and end dates
     cfStartEnd  = zip ((auto pDate) : init cfDates) cfDates
 
+    -- #TODO properly implement edd date
+    eDate = last cfDates'
     -- all the mkt not dates joint
-    mktDates = nodeDates pDate mkt
+    mktDates = nodeDates pDate eDate mkt
 
     -- all the market nodes in between coupon start and end dates inclusive
     accrNodes = map accrEx cfStartEnd
