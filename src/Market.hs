@@ -64,7 +64,6 @@ getVal' curve time  | null together = last ratesG
     datesG = view dates curve
     ratesG = view rates curve
 
--- #TODO put the maximum and minimum date in as well
 plotCurve :: String -> (Time,Time) -> (Rate,Rate) -> Curve -> Layout Double Rate
 plotCurve name tenorLimits rateLimits c = execEC $ do
     layout_y_axis . laxis_generate .= scaledAxis def rateLimits
