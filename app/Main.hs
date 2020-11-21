@@ -6,7 +6,7 @@ module Main where
 -- bs auto modules
 import Market(SimpleMarket(..),Curve(..),irCurve,hazardRates,rates,dates,integrateCurve'')
 import Trades.CallOption(callPrice,ModelParams(..))
-import Trades.CDS(Credit(..),protectionLegDF,accruedInterest)
+import Trades.CDS(Credit(..),CDS(..),protectionLegDF,accruedInterest)
 import Trades.CashFlow(CashFlows(..),cashFlowValue)
 
 import Types
@@ -18,11 +18,6 @@ import Numeric.Backprop
 
 main :: IO ()
 main =  do
-
-    -- Bs call price test
-    --let bs = MP { _r = 0.03, _strike = 50, _sigma = 1, _currentTime = 0.0, _endTime = 1.0, _st = 40.0}
-    --print $ gradBP callPrice bs
-
     let tenorDates = schedule (fromGregorian 2018 9 10) (fromGregorian 2020 10 15) (CalendarDiffDays (-6) 0)
 
     -- Create out market from curves
@@ -50,13 +45,16 @@ main =  do
         numPoints = 1
 
     --let pricingDate = fromGregorian 2018 9 12
-    let pricingDate = fromGregorian 2019 10 16
+    let pricingDate = fromGregorian 2018 10 13
+    let effective = fromGregorian 2018 10 14
+
+    let cds = CDS effective creditData fixedLegCashFlow
 
     print $ tenorDates
     --print $ integrateCurve'' irCurve1 pricingDate (tenorDates!!0)
     --print $ map (integrateCurve'' hazardRates1 pricingDate) tenorDates
 --    print $ evalBP (cashFlowValue pricingDate fixedLegCashFlow) mkt1
 
-    plotEvolution $ evolveLinear pricingDate fixedLegCashFlow creditData mkt1 mkt2 numPoints
+    plotEvolution $ evolveLinear pricingDate cds mkt1 mkt2 numPoints
 
     print "finished"

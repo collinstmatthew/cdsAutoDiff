@@ -5,7 +5,7 @@ module Evolution(evolveLinear,grid,plotEvolution) where
 import Types
 import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
 import Trades.CashFlow(CashFlows(..))
-import Trades.CDS(Credit(..),cdsPrice)
+import Trades.CDS(Credit(..),cdsPrice,CDS(..))
 
 import Numeric.Backprop
 
@@ -31,12 +31,12 @@ import Debug.Trace
 
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
 
-evolveLinear :: Time -> CashFlows -> Credit -> SimpleMarket -> SimpleMarket -> Int -> Evolution
-evolveLinear pdate fl cd mktStart mktEnd n = zip3 allMkts grads' prices where
+evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Int -> Evolution
+evolveLinear pdate cds mktStart mktEnd n = zip3 allMkts grads' prices where
     intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
     allMkts          = take (n+2) $ iterate (addMarket intermediateMkt) mktStart
-    prices           = map (evalBP (cdsPrice pdate fl cd)) allMkts
-    grads            = map (gradBP (cdsPrice pdate fl cd)) allMkts
+    prices           = map (evalBP (cdsPrice pdate cds)) allMkts
+    grads            = map (gradBP (cdsPrice pdate cds)) allMkts
     -- replace the dates in the gradient market with the original dates
     grads'           = zipWith replaceDates allMkts grads
 

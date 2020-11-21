@@ -31,15 +31,18 @@ cutStart l1 l2 = drop nD l2 where
     nD = length l2 - nA
 
 -- Takes a curve a sums all the points on it dummy functional on curve
-cashFlowValue :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
-cashFlowValue pDate cashflows mkt = discounted where
+cashFlowValue :: Reifies s W => Time -> Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
+cashFlowValue pDate effDate cashflows mkt = pricingEffDis * discounted where
         (cfDates,cfQuant) = unzip $ filter(\x-> fst x >= pDate)$ zip (view cashDates cashflows) (view quantity cashflows)
 
         -- get cash flow times and discouunt and survival factors
         timesCashFlows    = sequenceVar $ auto cfDates
-        survivalProbs     = map (integrateCurve (mkt ^^. hazardRates) (auto pDate)) timesCashFlows
-        discountFact      = map (integrateCurve (mkt ^^. irCurve) (auto pDate)) timesCashFlows
+        survivalProbs     = map (integrateCurve (mkt ^^. hazardRates) (auto effDate)) timesCashFlows
+        discountFact      = map (integrateCurve (mkt ^^. irCurve) (auto effDate)) timesCashFlows
 
         -- return final value of discounted cash flows
         quantityCashFlows = sequenceVar $ auto cfQuant
         discounted        = sum $ zipWith3 m3 discountFact quantityCashFlows survivalProbs
+
+        pricingEffDis     = 1.0/(integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effDate))
+
