@@ -15,7 +15,7 @@ import Math(genRange,minimum',maximum')
 import qualified Diagrams.Backend.Cairo.CmdLine as CmdInt
 import qualified Diagrams.Prelude               as DP
 import qualified Diagrams.Backend.Cairo         as CA
-import Diagrams.Core.Types(QDiagram)
+import qualified Diagrams.Core.Types            as DT
 import Graphics.Rendering.Chart.Grid(wideAbove,aboveN,besideN,above,gridToRenderable,Grid,tspan)
 import Graphics.Rendering.Chart.Backend.Diagrams(defaultEnv,runBackendR)
 import Graphics.Rendering.Chart.Easy(Renderable,bitmapAlignmentFns)
@@ -64,14 +64,23 @@ plotEvolution evolution = do
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
         --rendererdRates = map ( (fillBackground fs) . gridToRenderable . (rateRenderable priceLims tenorLimits numPoints limits)) result''
---        rendererdRates = map ( (rateRenderable tenorLimits limits)) result''
-        rendererdPrices = map ( (priceRenderable priceLims numPoints)) result''
+        rendererdRates  = map (rateRenderable tenorLimits limits) result''
+        rendererdVector = map vectorRenderable result''
+        rendererdPrices = map (priceRenderable priceLims numPoints) result''
 
-    defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
+    defaultEVec <- defaultEnv bitmapAlignmentFns 2000 2400
+    defaultERate <- defaultEnv bitmapAlignmentFns 2000 1600
+    defaultEPrice <- defaultEnv bitmapAlignmentFns 2000 800
 
     -- Type annotation is needed to set backend
-    let z1 :: [QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultE z) rendererdPrices
-    CmdInt.mainWith $ zip z1 [1..length z1]
+    let z1 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultEPrice z) rendererdPrices
+    let z2 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultERate z) rendererdRates
+    let z3 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultEVec z) rendererdVector
+
+    let zTotal = zipWith (DP.|||) z3 $ zipWith (DP.===) z1 z2
+
+    --CmdInt.mainWith $ zip zTotal [1..length zTotal]
+    CmdInt.mainWith $ zip zTotal [1..length zTotal]
 
 
 -- functions for plotting evolutiton
@@ -128,4 +137,4 @@ priceRenderable pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSoli
 vectorRenderable :: (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Double Double Double)
 vectorRenderable  (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
   where
-    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
+    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,1)
