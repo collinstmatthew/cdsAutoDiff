@@ -26,7 +26,7 @@ main =  do
         hazardRates   = Curve baseDates [0.02,0.025,0.03,0.035,0.04]
 
     let mktEnd        = SimpleMarket irCurve hazardRates where
-        irCurve       = Curve baseDates [0.05,0.06,0.06,0.1,0.18]
+        irCurve       = Curve baseDates [0.2,0.2,0.2,0.2,0.2]
         hazardRates   = Curve baseDates [0.01,0.015,0.02,0.025,0.03]
 
     let cds = CDS effective creditData fixedLegCashFlow where

@@ -9,7 +9,7 @@ import Trades.CDS(Credit(..),cdsPrice,CDS(..))
 
 import Numeric.Backprop
 
-import Math(genRange,minimum',maximum')
+import Math(genRangeDay,minimum',maximum')
 
 -- Imports needed for the graph
 import qualified Diagrams.Backend.Cairo.CmdLine as CmdInt
@@ -22,6 +22,8 @@ import Graphics.Rendering.Chart.Easy(Renderable,bitmapAlignmentFns)
 import Graphics.Rendering.Chart.Layout(layoutToRenderable)
 import Graphics.Rendering.Chart.Backend(FillStyle(..))
 import Graphics.Rendering.Chart.Easy
+
+import Graphics.Rendering.Chart.Axis.Time(timeValueFromDouble)
 
 import Data.Tuple.Extra
 
@@ -68,33 +70,35 @@ plotEvolution evolution = do
         rendererdVector = map vectorRenderable result''
         rendererdPrices = map (priceRenderable priceLims numPoints) result''
 
+    let renderedRes = map (\x -> (priceRenderable priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable x)) result''
+
     defaultEVec <- defaultEnv bitmapAlignmentFns 2000 2400
     defaultERate <- defaultEnv bitmapAlignmentFns 2000 1600
     defaultEPrice <- defaultEnv bitmapAlignmentFns 2000 800
 
-    -- Type annotation is needed to set backend
-    let z1 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultEPrice z) rendererdPrices
-    let z2 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultERate z) rendererdRates
-    let z3 :: [DT.QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultEVec z) rendererdVector
+    -- put all prices into the same list
+    let zAll :: [(DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any)] = map (\(x,y,z) -> (fst $ runBackendR defaultEPrice x,fst $ runBackendR defaultERate y,fst $ runBackendR defaultEVec z)) renderedRes
 
-    let zTotal = zipWith (DP.|||) z3 $ zipWith (DP.===) z1 z2
+    let zTotalAll = map (\(x,y,z) -> z DP.||| (x DP.=== y)) zAll
 
     --CmdInt.mainWith $ zip zTotal [1..length zTotal]
-    CmdInt.mainWith $ zip zTotal [1..length zTotal]
+    CmdInt.mainWith $ zip zTotalAll [1..length zTotal]
 
 
 -- functions for plotting evolutiton
 -- # TODO what if the tenors are different for irCurve and hazardRates
 -- should probably pass in the pricing date as well
-square :: SimpleMarket -> [(Double, Double)]
-square mkt = [(x,y) | x <- axis, y <- axis] where
-    axis = genRange start end 50
-    datesC = view (irCurve . dates) mkt
-    start  = fromInteger . toModifiedJulianDay $  head datesC
-    end    = fromInteger . toModifiedJulianDay $ last datesC
 
-ef :: Curve -> Curve -> (Double,Double) -> (Double,Double)
-ef derivCurve hazardCurve (x,y) = (getVal' derivCurve (ModifiedJulianDay (round y)),getVal' hazardCurve (ModifiedJulianDay (round x)))
+square :: SimpleMarket -> [(Time, Time)]
+square mkt = [(x,y) | x <- axis, y <- axis] where
+    -- generate 30 points on the grid
+    axis = genRangeDay start end 30
+    datesC = view (irCurve . dates) mkt
+    start  = head datesC
+    end    = last datesC
+
+ef :: Curve -> Curve -> (Time,Time) -> (Time,Time)
+ef derivCurve hazardCurve (x,y) = (timeValueFromDouble (getVal' derivCurve y),timeValueFromDouble (getVal' hazardCurve x))
 
 vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
@@ -105,20 +109,26 @@ vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     plot_vectors_style . vector_line_style . line_color .= c
     plot_vectors_style . vector_head_style . point_color .= c
 
+-- filter the axis so it's only for dates between start and end date don't know why more
+-- than that are generated automatically
+myaxisvals start end x =  autoTimeValueAxis $ filter (\y -> y >= start && y <= end) x
+
 plotVec mkt = do
         let deri = view irCurve mkt
             heri = view hazardRates mkt
-        let start = fromInteger .toModifiedJulianDay $ head $ view dates deri
-            end   = fromInteger . toModifiedJulianDay $ last $ view dates deri
+
+        let start = head $ view dates deri
+            end   = last $ view dates deri
+
         setColors [opaque black, opaque blue]
 --        layout_title .= "Derivatives of cds evolution"
-        layout_y_axis . laxis_generate  .= scaledAxis def (start,end)
+        layout_y_axis . laxis_generate  .= myaxisvals start end
         layout_y_axis . laxis_title     .= "IR Sensitivites"
         layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
         layout_y_axis . laxis_title_style . font_size .= 42
 
 
-        layout_x_axis . laxis_generate  .= scaledAxis def (start,end)
+        layout_x_axis . laxis_generate  .= myaxisvals start end
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
         layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
         layout_x_axis . laxis_title_style . font_size .= 42
@@ -140,7 +150,7 @@ priceRenderable pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSoli
     priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
 
 
-vectorRenderable :: (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Double Double Double)
+vectorRenderable :: (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Time Time Time)
 vectorRenderable  (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
   where
     vectorP    = tspan (layoutToRenderable (execEC (plotVec mktDeriv))) (1,1)

@@ -1,4 +1,7 @@
-module Math(normalCDF,erf,difference,differenceR,dot,m3, genRange, maximum',minimum') where
+module Math(normalCDF,erf,difference,differenceR,dot,m3, genRange, maximum',minimum', genRangeDay) where
+
+import Data.Time.Calendar(addDays,diffDays)
+import Types(Time)
 
 --https://www.johndcook.com/blog/2009/01/19/stand-alone-error-function-erf/
 -- implemnentation of error function
@@ -43,5 +46,8 @@ m3 :: Num a => a -> a -> a -> a
 m3 a b c = a * b * c
 
 -- generage a range between two numbeers
---genRange :: Double -> Double -> Double -> [Double]
 genRange start end gap = takeWhile (< end ) [start + gap*n | n <- [1..]]
+
+genRangeDay :: Time -> Time -> Integer -> [Time]
+genRangeDay start end gap = takeWhile (< end ) [addDays ((round diff)*n) start | n <- [1..]] where
+    diff = (fromIntegral (diffDays end start)) / (fromIntegral gap)
