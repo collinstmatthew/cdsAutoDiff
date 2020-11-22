@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Evolution(evolveLinear,grid,plotEvolution) where
+module Evolution(evolveLinear,plotEvolution) where
 
 import Types
 import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
@@ -63,14 +63,15 @@ plotEvolution evolution = do
         pricesAccum = map (\a -> take a prices) [1..length evolution]
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
-    let fs           = FillStyleSolid (opaque white)
-        rendererdImg = map ( (fillBackground fs) . gridToRenderable . (grid priceLims tenorLimits numPoints limits)) result''
+        --rendererdRates = map ( (fillBackground fs) . gridToRenderable . (rateRenderable priceLims tenorLimits numPoints limits)) result''
+--        rendererdRates = map ( (rateRenderable tenorLimits limits)) result''
+        rendererdPrices = map ( (priceRenderable priceLims numPoints)) result''
 
     defaultE <- defaultEnv bitmapAlignmentFns 2000 1000
 
     -- Type annotation is needed to set backend
-    let z :: [QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultE z) rendererdImg
-    CmdInt.mainWith $ zip z [1..length z]
+    let z1 :: [QDiagram CA.Cairo DP.V2 Double DP.Any] = map (\z-> fst $ runBackendR defaultE z) rendererdPrices
+    CmdInt.mainWith $ zip z1 [1..length z1]
 
 
 -- functions for plotting evolutiton
@@ -108,18 +109,23 @@ chart mkt = do
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
         plot $ vectorField mkt "" (ef deri heri)
 
--- Construct a grid of charts, with a single title accross the top
---grid :: Int -> (SimpleMarket,SimpleMarket,[Price]) -> Grid ( Renderable (LayoutPick Rate Rate Rate))
-grid pricelims tenorLimits maxTime limits (mktOrig,mktDeriv,price) = title `wideAbove` (besideN [ vectorP, aboveN [priceP,irP,hzP]])
+
+rateRenderable :: (Time,Time) -> ((Rate,Rate),(Rate,Rate)) -> (SimpleMarket,b,c) -> Renderable (LayoutPick Time Rate Rate)
+rateRenderable tenorLimits limits (mktOrig,mktDeriv,price) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) (aboveN [irP,hzP])
   where
     (irLimits,hzLimits)  = limits
     irP        = tspan (layoutToRenderable (plotCurve "Interest rates" tenorLimits irLimits mktirCurve)) (1,1)
     hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" tenorLimits hzLimits mkthzCurve)) (1,1)
-    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)
-    priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
-    title      = setPickFn nullPickFn $ label ls HTA_Centre VTA_Centre "CDS sensitivies"
-    ls         = def { _font_size   = 15 , _font_weight = FontWeightBold }
+
+priceRenderable :: (Price,Price) -> Int -> (SimpleMarket,b,[Price]) -> Renderable (LayoutPick Double Price Price)
+priceRenderable pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) (priceP)
+  where
+    priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
 
 
+vectorRenderable :: (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Double Double Double)
+vectorRenderable  (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
+  where
+    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,3)

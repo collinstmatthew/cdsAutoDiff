@@ -2,3 +2,5 @@ is the way the accrued payments current calculated assuming that all the cashflo
 
 have the proper dates at the bottom on the graph instead of just numbers
 
+draw a linear interpolation between first two points on pricing graph to show convexity/nonlineartiy
+
