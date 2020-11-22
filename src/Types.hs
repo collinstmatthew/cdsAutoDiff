@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Types(Rate,Price,Vol,Time,dateFrac,DayConvention(..),differenceDay,differenceDay',schedule) where
+module Types(Rate,Price,Vol,Time,dateFrac,DayConvention(..),differenceDay,differenceDay',schedule,diffDays', differenceDayE) where
 
 import Data.Time.Calendar
 import GHC.Generics
@@ -49,3 +49,6 @@ differenceDay' (Just begin) dc l = zipWith (\x y -> (fromIntegral (diffDays x y)
 differenceDay' Nothing dc l = zipWith (\x y -> (fromIntegral (diffDays x y))/365) (tail l) (init l)
 
 
+differenceDayE :: Reifies s W => Maybe (BVar s Day) ->  [BVar s Day] -> [BVar s Double]
+differenceDayE (Just begin) l = zipWith (\x y -> diffDays' x y) l (begin : init l)
+differenceDayE Nothing l = zipWith (\x y -> diffDays' x y) (tail l) (init l)

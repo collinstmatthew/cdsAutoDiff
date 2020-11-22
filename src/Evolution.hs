@@ -33,12 +33,22 @@ import Debug.Trace
 
 type Evolution = [(SimpleMarket,SimpleMarket,Price)]
 
-evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Int -> Evolution
-evolveLinear pdate cds mktStart mktEnd n = zip3 allMkts grads' prices where
+evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Integer -> Maybe Time -> Evolution
+evolveLinear pdate cds mktStart mktEnd n evEnd = zip3 allMkts grads' prices where
+    -- pricing dates
+    pDateEvolve :: [Time] = case evEnd of
+                              Just e  -> genRangeDay pdate e n
+                              Nothing -> take (fromInteger (n+2)) $ repeat pdate
+
     intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
-    allMkts          = take (n+2) $ iterate (addMarket intermediateMkt) mktStart
-    prices           = map (evalBP (cdsPrice pdate cds)) allMkts
-    grads            = map (gradBP (cdsPrice pdate cds)) allMkts
+    allMkts          = take (fromInteger (n+2)) $ iterate (addMarket intermediateMkt) mktStart
+--    prices           = map (evalBP (cdsPrice pdate cds)) allMkts
+--    grads            = map (gradBP (cdsPrice pdate cds)) allMkts
+
+    prices           = zipWith (\x y -> evalBP (cdsPrice y cds) x) allMkts pDateEvolve
+    grads            = zipWith (\x y -> gradBP (cdsPrice y cds) x) allMkts pDateEvolve
+
+
     -- replace the dates in the gradient market with the original dates
     grads'           = zipWith replaceDates allMkts grads
 
@@ -65,11 +75,6 @@ plotEvolution evolution = do
         pricesAccum = map (\a -> take a prices) [1..length evolution]
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
-        --rendererdRates = map ( (fillBackground fs) . gridToRenderable . (rateRenderable priceLims tenorLimits numPoints limits)) result''
-        rendererdRates  = map (rateRenderable tenorLimits limits) result''
-        rendererdVector = map vectorRenderable result''
-        rendererdPrices = map (priceRenderable priceLims numPoints) result''
-
     let renderedRes = map (\x -> (priceRenderable priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable x)) result''
 
     defaultEVec <- defaultEnv bitmapAlignmentFns 2000 2400
@@ -82,7 +87,7 @@ plotEvolution evolution = do
     let zTotalAll = map (\(x,y,z) -> z DP.||| (x DP.=== y)) zAll
 
     --CmdInt.mainWith $ zip zTotal [1..length zTotal]
-    CmdInt.mainWith $ zip zTotalAll [1..length zTotal]
+    CmdInt.mainWith $ zip zTotalAll [1..length zTotalAll]
 
 
 -- functions for plotting evolutiton
@@ -98,7 +103,7 @@ square mkt = [(x,y) | x <- axis, y <- axis] where
     end    = last datesC
 
 ef :: Curve -> Curve -> (Time,Time) -> (Time,Time)
-ef derivCurve hazardCurve (x,y) = (timeValueFromDouble (getVal' derivCurve y),timeValueFromDouble (getVal' hazardCurve x))
+ef derivCurve hazardCurve (x,y) = (timeValueFromDouble (1000* (getVal' derivCurve y)),timeValueFromDouble (1000 * (getVal' hazardCurve x)))
 
 vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor

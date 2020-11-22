@@ -64,7 +64,7 @@ protectionLegDF pDate endDate mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB)
     (fi,hi,bi) =  getFHB mkt lDates
 
 accruedInterest :: Reifies s W => Time -> CashFlows -> BVar s SimpleMarket -> BVar s Price
-accruedInterest pDate cf mkt =  (dot cfQuant (zipWith (*) eta accrP)) where
+accruedInterest pDate cf mkt =  (dot cfQuant accrP) where
     -- all the cash flow payment dates
     (cfDates',cfQuant') = unzip $ filter (\x -> fst x > pDate) $ zip (view cashDates cf) (view quantity cf)
 
@@ -85,19 +85,20 @@ accruedInterest pDate cf mkt =  (dot cfQuant (zipWith (*) eta accrP)) where
     -- sum over each period then will do product this with eta and multiply by coupon to get result
     accrP    = map (helperF mkt) accrNodes
     -- #TODO implement proper day count convention= here/get
-    eta      = map (1/) $ differenceDay (Just (auto pDate)) ACT365F cfDates
 
 helperF  :: Reifies s W => BVar s SimpleMarket -> [BVar s Time] -> BVar s Price
 helperF mkt dates = sum res  where
     (fi,hi,bi) = getFHB mkt dates
     diffBi     = differenceR Nothing bi
-    dti        = differenceDay Nothing ACT365F dates
-    res        = zipWith5 (\f1 h1 b1 db1 dt1 -> (dt1 * h1)/(f1+h1) * (db1/(f1+h1) - b1)) fi hi bi diffBi dti
+    -- proportion of time until next market node date to whole period
+    deltaT = map (\x -> x/ diffDays' (last dates) (head dates)) (differenceDayE Nothing dates)
+
+    res        = zipWith5 (\f1 h1 b1 db1 dt ->dt * (h1/(f1+h1)) * (db1/(f1+h1) - b1)) fi hi (tail bi) diffBi deltaT
 
 --cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
 cdsPrice :: Reifies s W => Time -> CDS -> BVar s SimpleMarket -> BVar s Price
---cdsPrice pDate cashFlows creditData mkt = couponLeg - aI  - defaultLeg where
-cdsPrice pDate cds mkt = eDateDiscount * (couponLeg - aI  - defaultLeg) where
+cdsPrice pDate cds mkt = couponLeg - aI  - defaultLeg where
+--cdsPrice pDate cds mkt = couponLeg where
     cashFlows = view premiumLeg cds
     creditData = view creditDetails cds
     effD = max (view effective cds) pDate
@@ -113,5 +114,3 @@ cdsPrice pDate cds mkt = eDateDiscount * (couponLeg - aI  - defaultLeg) where
         notional'  = cD ^^. notional
         rr   = cD ^^. recoveryRate
         cD   = auto creditData
-
-

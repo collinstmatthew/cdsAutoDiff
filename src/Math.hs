@@ -49,5 +49,5 @@ m3 a b c = a * b * c
 genRange start end gap = takeWhile (< end ) [start + gap*n | n <- [1..]]
 
 genRangeDay :: Time -> Time -> Integer -> [Time]
-genRangeDay start end gap = takeWhile (< end ) [addDays ((round diff)*n) start | n <- [1..]] where
-    diff = (fromIntegral (diffDays end start)) / (fromIntegral gap)
+genRangeDay start end gap = [addDays ((round diff)*n) start | n <- [0..(gap + 1)]] where
+    diff = (fromIntegral (diffDays end start)) / (fromIntegral (gap + 1))
