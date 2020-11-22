@@ -68,17 +68,21 @@ getVal' curve time  | null together = last ratesG
     datesG = view dates curve
     ratesG = view rates curve
 
-myAxisFun :: TimeValue t => AxisFn t
-myAxisFun pts = timeValueAxis months months (ft "%b") BetweenTicks years  (ft "%Y") BetweenTicks pts  where
-    ft    = DF.formatTime DF.defaultTimeLocale
-
 plotCurve :: String -> (Time,Time) -> (Rate,Rate) -> Curve -> Layout Time Rate
 plotCurve name tenorLimits rateLimits c = execEC $ do
+
     layout_y_axis . laxis_generate .= scaledAxis def rateLimits
     layout_y_axis . laxis_title    .= name
-    layout_x_axis . laxis_title    .= "Time"
+    layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
+    layout_y_axis . laxis_title_style . font_size .= 42
+
+    --layout_x_axis . laxis_title    .= "Time"
     -- ensure that the x axis has the correct values
-    layout_x_axis . laxis_generate .= myAxisFun
+    layout_x_axis . laxis_generate .= autoTimeValueAxis
+    layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
+    layout_x_axis . laxis_title_style . font_size .= 42
+
+
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(s,getVal' c s) | s <- uniqueSort xaxisVal] ]
   where
@@ -92,10 +96,19 @@ plotCurve name tenorLimits rateLimits c = execEC $ do
 -- # TODO put startitng time in instead of o
 plotPrice :: (Price,Price) -> Int -> [Price] -> Layout Double Price
 plotPrice priceLimits maxTime prices = execEC $ do
+
     layout_y_axis . laxis_generate .= scaledAxis def priceLimits
-    layout_x_axis . laxis_generate .= scaledAxis def (0::Double,fromIntegral maxTime)
-    layout_x_axis . laxis_title    .= "Time"
     layout_y_axis . laxis_title    .= "Price"
+    layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
+    layout_y_axis . laxis_title_style . font_size .= 42
+
+    layout_x_axis . laxis_generate .= scaledAxis def (0::Double,fromIntegral maxTime)
+    -- #TODO display proper time here when I can
+    layout_x_axis . laxis_title    .= "Dummy Time"
+    layout_x_axis . laxis_title_style . font_size .= 42
+
+    layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
+
 
     setColors [opaque black, opaque blue]
     plot $ line "" [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]

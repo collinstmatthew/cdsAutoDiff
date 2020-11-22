@@ -105,7 +105,7 @@ vectorField mkt title f = fmap plotVectorField $ liftEC $ do
     plot_vectors_style . vector_line_style . line_color .= c
     plot_vectors_style . vector_head_style . point_color .= c
 
-chart mkt = do
+plotVec mkt = do
         let deri = view irCurve mkt
             heri = view hazardRates mkt
         let start = fromInteger .toModifiedJulianDay $ head $ view dates deri
@@ -114,8 +114,14 @@ chart mkt = do
 --        layout_title .= "Derivatives of cds evolution"
         layout_y_axis . laxis_generate  .= scaledAxis def (start,end)
         layout_y_axis . laxis_title     .= "IR Sensitivites"
+        layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
+        layout_y_axis . laxis_title_style . font_size .= 42
+
+
         layout_x_axis . laxis_generate  .= scaledAxis def (start,end)
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
+        layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
+        layout_x_axis . laxis_title_style . font_size .= 42
         plot $ vectorField mkt "" (ef deri heri)
 
 
@@ -123,8 +129,8 @@ rateRenderable :: (Time,Time) -> ((Rate,Rate),(Rate,Rate)) -> (SimpleMarket,b,c)
 rateRenderable tenorLimits limits (mktOrig,mktDeriv,price) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) (aboveN [irP,hzP])
   where
     (irLimits,hzLimits)  = limits
-    irP        = tspan (layoutToRenderable (plotCurve "Interest rates" tenorLimits irLimits mktirCurve)) (1,1)
-    hzP        = tspan (layoutToRenderable (plotCurve "Hazard rate" tenorLimits hzLimits mkthzCurve)) (1,1)
+    irP        = tspan (layoutToRenderable (plotCurve "Foward Interest Rate" tenorLimits irLimits mktirCurve)) (1,1)
+    hzP        = tspan (layoutToRenderable (plotCurve "Forward Hazard Rate" tenorLimits hzLimits mkthzCurve)) (1,1)
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
 
@@ -137,4 +143,4 @@ priceRenderable pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSoli
 vectorRenderable :: (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Double Double Double)
 vectorRenderable  (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
   where
-    vectorP    = tspan (layoutToRenderable (execEC (chart mktDeriv))) (1,1)
+    vectorP    = tspan (layoutToRenderable (execEC (plotVec mktDeriv))) (1,1)
