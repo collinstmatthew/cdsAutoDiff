@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Trades.CDS(Credit(..),CDS(..),cdsPrice, protectionLegDF,accruedInterest) where
+module Trades.CDS(Credit(..),CDS(..),cdsPrice, protectionLegDF,accruedInterest,premiumLeg) where
 
 import Numeric.Backprop
 import Control.Lens
