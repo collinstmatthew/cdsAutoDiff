@@ -21,7 +21,7 @@ module Market(SimpleMarket(..),
               addMarket,
               divideMarket,
               plotCurve,
-              plotPrice,
+              plotPriceFakeT,
               replaceDates
              ) where
 
@@ -93,25 +93,45 @@ plotCurve name tenorLimits rateLimits c = execEC $ do
     xaxisVal =  ss ++ map (addDays eps) ss ++ [fst tenorLimits] ++ [snd tenorLimits]
 
 -- # This is just dummy price currently and isn't got properly
--- # TODO put startitng time in instead of o
-plotPrice :: (Price,Price) -> Int -> [Price] -> Layout Double Price
-plotPrice priceLimits maxTime prices = execEC $ do
+plotPriceFakeT :: (Price,Price) -> Int -> [(Double,Price)] -> Layout Double Price
+plotPriceFakeT priceLimits maxTime prices = execEC $ do
 
     layout_y_axis . laxis_generate .= scaledAxis def priceLimits
     layout_y_axis . laxis_title    .= "Price"
     layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
     layout_y_axis . laxis_title_style . font_size .= 42
 
-    layout_x_axis . laxis_generate .= scaledAxis def (0::Double,fromIntegral maxTime)
-    -- #TODO display proper time here when I can
-    layout_x_axis . laxis_title    .= "Dummy Time"
+    layout_x_axis . laxis_generate .= scaledAxis def (0,fromIntegral maxTime)
+    layout_x_axis . laxis_title    .= "Fake Time"
     layout_x_axis . laxis_title_style . font_size .= 42
 
     layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
 
 
     setColors [opaque black, opaque blue]
-    plot $ line "" [  [(fromIntegral s, prices!!s ) | s <- [0..length prices - 1]  ] ]
+    plot $ line "" [ prices ]
+
+manipAutoTime :: Time -> Time-> AxisFn Time
+manipAutoTime min max pts = autoTimeValueAxis $ [min] ++ pts ++ [max]
+
+plotPriceRealT :: (Price,Price) -> Time -> [(Time,Price)] -> Layout Time Price
+plotPriceRealT priceLimits maxTime prices = execEC $ do
+
+    layout_y_axis . laxis_generate .= scaledAxis def priceLimits
+    layout_y_axis . laxis_title    .= "Price"
+    layout_y_axis . laxis_style . axis_label_style . font_size  .= 36
+    layout_y_axis . laxis_title_style . font_size .= 42
+
+    -- add maximum times on the axis
+    layout_x_axis . laxis_generate .= manipAutoTime ((fst.head) prices) maxTime
+    layout_x_axis . laxis_title    .= "Time"
+    layout_x_axis . laxis_title_style . font_size .= 42
+
+    layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
+
+
+    setColors [opaque black, opaque blue]
+    plot $ line "" [prices]
 
 
 -- find the difference of the two curves

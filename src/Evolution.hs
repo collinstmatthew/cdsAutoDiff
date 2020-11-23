@@ -3,7 +3,7 @@
 module Evolution(evolveLinear,plotEvolution) where
 
 import Types
-import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPrice,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
+import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPriceFakeT,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
 import Trades.CashFlow(CashFlows(..),cashDates)
 import Trades.CDS(Credit(..),cdsPrice,CDS(..),premiumLeg)
 
@@ -31,14 +31,17 @@ import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
 
 import Debug.Trace
 
-type Evolution = [(SimpleMarket,SimpleMarket,Price)]
+type Evolution =(Either [Time] [Double],[(SimpleMarket,SimpleMarket,Price)])
 
-evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Integer -> Maybe Time -> ((Time,Time),Evolution)
-evolveLinear pdate cds mktStart mktEnd n evEnd = ((pdate,end),zip3 allMkts grads' prices) where
+evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Integer -> Maybe Time -> Evolution
+evolveLinear pdate cds mktStart mktEnd n evEnd =(pDateEvolve', zip3 allMkts grads' prices) where
     -- pricing dates
-    pDateEvolve :: [Time] = case evEnd of
-                              Just e  -> genRangeDay pdate e n
-                              Nothing -> take (fromInteger (n+2)) $ repeat pdate
+    pDateEvolve  = case evEnd of
+                      Just e  -> genRangeDay pdate e n
+                      Nothing -> take (fromInteger (n+2)) $ repeat pdate
+    pDateEvolve' = case evEnd of
+                     Just e -> Left pDateEvolve
+                     Nothing -> Right $ take (fromInteger (n+2)) [1..]
 
     end = last $view cashDates $ view premiumLeg cds
 
@@ -62,19 +65,20 @@ limitsTimeIrHaz mktS mktE = (minimum' (ir ++ hz), maximum' (ir ++ hz))  where
     hz = view (hazardRates . dates) mktS ++ view (hazardRates . dates) mktE
 
 -- plots a linear evolugion of a market
-plotEvolution ((start,end), evolution) = do
+plotEvolution (Right times,evolution) = do
     -- limits of the rates in the evolution for plotting
     let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
     let tenorLimits = limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution))
 
     let numPoints = length evolution
         -- first is either time or dummy time
-    let prices      = map thd3 evolution
-        priceLims   = (minimum prices, maximum prices)
+    let prices      = zip times (map thd3 evolution)
+        priceLims   = (minimum (map snd prices), maximum (map snd prices))
         pricesAccum = map (\a -> take a prices) [1..length evolution]
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
-    let renderedRes = map (\x -> (priceRenderable priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable start end x)) result''
+
+    let renderedRes = map (\x -> (priceRenderableFakeT priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable tenorLimits x)) result''
 
     defaultEVec <- defaultEnv bitmapAlignmentFns 2000 2400
     defaultERate <- defaultEnv bitmapAlignmentFns 2000 1600
@@ -91,7 +95,6 @@ plotEvolution ((start,end), evolution) = do
 
 -- functions for plotting evolutiton
 -- # TODO what if the tenors are different for irCurve and hazardRates
--- should probably pass in the pricing date as well
 
 square :: Time -> Time -> SimpleMarket -> [(Time, Time)]
 square start end mkt = [(x,y) | x <- axis, y <- axis] where
@@ -142,13 +145,13 @@ rateRenderable tenorLimits limits (mktOrig,mktDeriv,price) = ((fillBackground ( 
     mktirCurve = view irCurve mktOrig
     mkthzCurve = view hazardRates mktOrig
 
-priceRenderable :: (Price,Price) -> Int -> (SimpleMarket,b,[Price]) -> Renderable (LayoutPick Double Price Price)
-priceRenderable pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) (priceP)
+priceRenderableFakeT :: (Price,Price) -> Int -> (SimpleMarket,b,[(Double,Price)]) -> Renderable (LayoutPick Double Price Price)
+priceRenderableFakeT pricelims maxTime (_,_,price) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) (priceP)
   where
-    priceP     = tspan (layoutToRenderable (plotPrice pricelims maxTime price)) (1,1)
+    priceP     = tspan (layoutToRenderable (plotPriceFakeT pricelims maxTime price)) (1,1)
 
 
-vectorRenderable :: Time -> Time -> (SimpleMarket,SimpleMarket,[Price]) -> Renderable (LayoutPick Time Time Time)
-vectorRenderable start end (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
+vectorRenderable :: (Time,Time) -> (SimpleMarket,SimpleMarket,[(Double,Price)]) -> Renderable (LayoutPick Time Time Time)
+vectorRenderable (start,end) (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
   where
     vectorP    = tspan (layoutToRenderable (execEC (plotVec start end mktDeriv))) (1,1)

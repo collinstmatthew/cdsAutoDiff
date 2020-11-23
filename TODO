@@ -1,6 +1,6 @@
 
  the proper dates at the bottom on the pricing graph instead of just numbers
 
-why is accrued interest linearly increasing and not sawtooth
-check slop on price for just cashflop converges to step function as I increase the numer of poitns
+Another assumption is not stub period and first coupon isn't always paid
 
+zip together prices and the respective time they happen to pass in

@@ -54,7 +54,7 @@ getFHB mkt joinDates = (fi,hi,bi) where
 
 -- computes the discouunt factor of the protecitonLeg
 protectionLegDF :: Reifies s W => Time -> Time -> BVar s SimpleMarket -> BVar s Rate
-protectionLegDF pDate endDate mkt = sum $ zipWith3 (\f h dB -> (h / (f+h)) * dB) fi hi diffBi  where
+protectionLegDF pDate endDate mkt = sum $ zipWith3 (\f h dB -> -1 * (h / (f+h)) * dB) fi hi diffBi  where
     diffBi     = differenceR Nothing bi
     -- # startDate is actually difference to the pricing date on the cds
     lDates     =  nodeDates pDate endDate mkt
@@ -97,7 +97,7 @@ helperF mkt dates = sum res  where
 
 --cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
 cdsPrice :: Reifies s W => Time -> CDS -> BVar s SimpleMarket -> BVar s Price
-cdsPrice pDate cds mkt = couponLeg - aI  - defaultLeg where
+cdsPrice pDate cds mkt = couponLeg + aI + defaultLeg where
 --cdsPrice pDate cds mkt = couponLeg where
     cashFlows = view premiumLeg cds
     creditData = view creditDetails cds
