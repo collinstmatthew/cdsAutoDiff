@@ -13,7 +13,7 @@ import Evolution(evolveLinear,plotEvolution)
 
 import Data.Time.Calendar
 import Numeric.Backprop
-
+import Data.Tuple.Extra
 
 main :: IO ()
 main =  do
@@ -25,27 +25,27 @@ main =  do
 
     -- Create two makets a starting and end market
     let mktStart      = SimpleMarket irCurve  hazardRates where
-        irCurve       = Curve baseDates [0.02,0.025,0.03,0.035,0.04]
-        hazardRates   = Curve baseDates [0.001,0.002,0.002,0.003,0.004]
+        irCurve       = Curve baseDates [0.02,0.025,0.035,0.05,0.07]
+        hazardRates   = Curve baseDates [0.01,0.012,0.014,0.016,0.018]
 
     let mktEnd        = SimpleMarket irCurve hazardRates where
-        irCurve       = Curve baseDates [0.02,0.025,0.025,0.025,0.025]
-        hazardRates   = Curve baseDates [0.003,0.003,0.003,0.003,0.003]
+        irCurve       = Curve baseDates [0.01,0.01,0.01,0.01,0.01]
+        hazardRates   = Curve baseDates [0.066,0.074,0.077,0.081,0.087]
 
     let cds = CDS effective creditData fixedLegCashFlow where
         effective        = fromGregorian 2018 10 14
-        fixedLegCashFlow = CashFlows baseDates [0.3,0.3,0.3,0.3]
+        fixedLegCashFlow = CashFlows baseDates [0.06,0.06,0.06,0.06,0.06]
         creditData       = Credit 5 0.4
 
-    let numPoints   = 25
-        pricingDate = fromGregorian 2018 09 13
+    let numPoints   = 30
+        pricingDate = fromGregorian 2018 11 14
 
-    --let evolutionEnd = Just $ fromGregorian 2018 10 20
---    let evolutionEnd = Just $ fromGregorian 2020 10 15
     let evolutionEnd = Nothing
 
-    print $ evalBP (cdsPrice pricingDate cds) mktStart
+--    print $ evalBP (cdsPrice (fromGregorian 2020 04 16) cds) mktStart
 
---    plotEvolution $ evolveLinear pricingDate cds mktStart mktEnd numPoints evolutionEnd
+    let evolution = evolveLinear pricingDate cds mktStart mktEnd numPoints evolutionEnd
+
+    plotEvolution $ evolution
 
     print "finished"

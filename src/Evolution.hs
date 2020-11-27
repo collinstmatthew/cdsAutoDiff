@@ -3,7 +3,7 @@
 module Evolution(evolveLinear,plotEvolution) where
 
 import Types
-import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPriceFakeT,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
+import Market(SimpleMarket(..),replaceDates,addMarket,divideMarket,diffMarket,plotPriceFakeT,plotPriceRealT,irCurve,hazardRates,plotCurve,getVal',dates,rates,Curve)
 import Trades.CashFlow(CashFlows(..),cashDates)
 import Trades.CDS(Credit(..),cdsPrice,CDS(..),premiumLeg)
 
@@ -31,7 +31,7 @@ import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
 
 import Debug.Trace
 
-type Evolution =(Either [Time] [Double],[(SimpleMarket,SimpleMarket,Price)])
+type Evolution =(Either [Time] Time,[(SimpleMarket,SimpleMarket,Price)])
 
 evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Integer -> Maybe Time -> Evolution
 evolveLinear pdate cds mktStart mktEnd n evEnd =(pDateEvolve', zip3 allMkts grads' prices) where
@@ -41,7 +41,7 @@ evolveLinear pdate cds mktStart mktEnd n evEnd =(pDateEvolve', zip3 allMkts grad
                       Nothing -> take (fromInteger (n+2)) $ repeat pdate
     pDateEvolve' = case evEnd of
                      Just e -> Left pDateEvolve
-                     Nothing -> Right $ take (fromInteger (n+2)) [1..]
+                     Nothing -> Right $ pdate
 
     end = last $view cashDates $ view premiumLeg cds
 
@@ -65,26 +65,60 @@ limitsTimeIrHaz mktS mktE = (minimum' (ir ++ hz), maximum' (ir ++ hz))  where
     hz = view (hazardRates . dates) mktS ++ view (hazardRates . dates) mktE
 
 -- plots a linear evolugion of a market
-plotEvolution (Right times,evolution) = do
+plotEvolution (Left times,evolution) = do
     -- limits of the rates in the evolution for plotting
     let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
-    let tenorLimits = limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution))
+    let tenorLimits = (head times, last times)
 
-    let numPoints = length evolution
+    -- this should be the max element of times not he number of points now
+    let numPoints = last times
         -- first is either time or dummy time
     let prices      = zip times (map thd3 evolution)
         priceLims   = (minimum (map snd prices), maximum (map snd prices))
         pricesAccum = map (\a -> take a prices) [1..length evolution]
         result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
 
+    -- maximum length of the vector on the first derivative market so I can scale whole time evolution
+    let (maxX,maxY)= maxVecLength tenorLimits (snd3 (head evolution)) ef'
 
-    let renderedRes = map (\x -> (priceRenderableFakeT priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable tenorLimits x)) result''
+    let renderedRes = map (\x -> (priceRenderableRealT priceLims numPoints x,rateRenderable tenorLimits limits x,vectorRenderable (maxX,maxY) tenorLimits x)) result''
 
-    defaultEVec <- defaultEnv bitmapAlignmentFns 2000 2400
-    defaultERate <- defaultEnv bitmapAlignmentFns 2000 1600
+    defaultEVec   <- defaultEnv bitmapAlignmentFns 2000 2400
+    defaultERate  <- defaultEnv bitmapAlignmentFns 2000 1600
     defaultEPrice <- defaultEnv bitmapAlignmentFns 2000 800
 
-    -- put all prices into the same list
+    -- put all prices into the same list need this type annotion to specify the back end
+    let zAll :: [(DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any)] = map (\(x,y,z) -> (fst $ runBackendR defaultEPrice x,fst $ runBackendR defaultERate y,fst $ runBackendR defaultEVec z)) renderedRes
+
+    let zTotalAll = map (\(x,y,z) -> z DP.||| (x DP.=== y)) zAll
+
+    --CmdInt.mainWith $ zip zTotal [1..length zTotal]
+    CmdInt.mainWith $ zip zTotalAll [1..length zTotalAll]
+
+-- plots a linear evolugion of a market
+plotEvolution (Right pdate,evolution) = do
+    let times::[Double] = take (length evolution)  [0..]
+    -- limits of the rates in the evolution for plotting
+    let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
+    let tenorLimits =(pdate, snd $ limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution)))
+
+    let maxTime = length evolution -1
+        -- first is either time or dummy time
+    let prices      = zip times (map thd3 evolution)
+        priceLims   = (minimum (map snd prices), maximum (map snd prices))
+        pricesAccum = map (\a -> take a prices) [1..length evolution]
+        result''    = zipWith (\(x,y,z) p2 -> (x,y,p2)   ) evolution pricesAccum
+
+    -- maximum length of the vector on the first derivative market so I can scale whole time evolution
+    let (maxX,maxY) = maxVecLength tenorLimits (snd3 (head evolution)) ef'
+
+    let renderedRes = map (\x -> (priceRenderableFakeT priceLims maxTime x,rateRenderable tenorLimits limits x,vectorRenderable (maxX,maxY) tenorLimits x)) result''
+
+    defaultEVec   <- defaultEnv bitmapAlignmentFns 2000 2400
+    defaultERate  <- defaultEnv bitmapAlignmentFns 2000 1600
+    defaultEPrice <- defaultEnv bitmapAlignmentFns 2000 800
+
+    -- put all prices into the same list need this type annotion to specify the back end
     let zAll :: [(DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any,DT.QDiagram CA.Cairo DP.V2 Double DP.Any)] = map (\(x,y,z) -> (fst $ runBackendR defaultEPrice x,fst $ runBackendR defaultERate y,fst $ runBackendR defaultEVec z)) renderedRes
 
     let zTotalAll = map (\(x,y,z) -> z DP.||| (x DP.=== y)) zAll
@@ -96,18 +130,27 @@ plotEvolution (Right times,evolution) = do
 -- functions for plotting evolutiton
 -- # TODO what if the tenors are different for irCurve and hazardRates
 
+-- scaled the vectors so that each component is an integer between -100 and 100
+-- take a grid and a function and returns a function from grid -> Grid
+scaleVecs :: Double -> Double -> ((Time,Time) -> (Double,Double)) -> ((Time,Time) -> (Time,Time))
+scaleVecs maxX maxY f1 =  transform . f1         where
+    scaleX = 20 / maxX
+    scaleY = 20 / maxY
+    transform (x,y) = (timeValueFromDouble (scaleX *x), timeValueFromDouble (scaleY *y))
+
+
 square :: Time -> Time -> SimpleMarket -> [(Time, Time)]
-square start end mkt = [(x,y) | x <- axis, y <- axis] where
+square start end mkt =  [(x,y) | x <- axis, y <- axis]  where
     -- generate 30 points on the grid
     axis = genRangeDay start end 20
 
-ef :: Curve -> Curve -> (Time,Time) -> (Time,Time)
-ef derivCurve hazardCurve (x,y) = (timeValueFromDouble (100* (getVal' derivCurve y)),timeValueFromDouble (100 * (getVal' hazardCurve x)))
+ef' :: Curve -> Curve -> (Time,Time) -> (Double,Double)
+ef' derivCurve hazardCurve (x,y) = ( (getVal' derivCurve y),(getVal' hazardCurve x))
 
 vectorField start end mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
     plot_vectors_mapf  .= f
-    plot_vectors_scale .= 1
+    plot_vectors_scale .= 0
     plot_vectors_grid  .= square start end mkt
     plot_vectors_title .= title
     plot_vectors_style . vector_line_style . line_color .= c
@@ -117,11 +160,27 @@ vectorField start end mkt title f = fmap plotVectorField $ liftEC $ do
 -- than that are generated automatically
 myaxisvals start end x =  autoTimeValueAxis $ filter (\y -> y >= start && y <= end) x
 
-plotVec start end mkt = do
+
+-- Get the maximum vector legnth from the evolution so we can scale for between 0 and 20
+maxVecLength :: (Time,Time) -> SimpleMarket -> (Curve -> Curve -> (Time,Time) -> (Double,Double)) -> (Double,Double)
+maxVecLength (start,end) market f1 = (maximum allX, maximum allY) where
+    ir   = view irCurve market
+    hz   = view hazardRates market
+    grid = square start end market
+
+    allVecs = map (f1 ir hz) grid
+    -- gets the absolutes of everything
+    (allX,allY) = unzip $ map (\(x,y) -> (abs x, abs y)) allVecs
+
+
+
+plotVec maxX maxY start end mkt = do
         let deri = view irCurve mkt
             heri = view hazardRates mkt
 
-        setColors [opaque black, opaque blue]
+        let myFun = scaleVecs maxX maxY (ef' deri heri)
+
+        setColors [opaque blue]
 --        layout_title .= "Derivatives of cds evolution"
         layout_y_axis . laxis_generate  .= myaxisvals start end
         layout_y_axis . laxis_title     .= "IR Sensitivites"
@@ -133,7 +192,7 @@ plotVec start end mkt = do
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
         layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
         layout_x_axis . laxis_title_style . font_size .= 42
-        plot $ vectorField start end mkt "" (ef deri heri)
+        plot $ vectorField start end mkt "" myFun
 
 
 rateRenderable :: (Time,Time) -> ((Rate,Rate),(Rate,Rate)) -> (SimpleMarket,b,c) -> Renderable (LayoutPick Time Rate Rate)
@@ -151,7 +210,12 @@ priceRenderableFakeT pricelims maxTime (_,_,price) = ((fillBackground ( FillStyl
     priceP     = tspan (layoutToRenderable (plotPriceFakeT pricelims maxTime price)) (1,1)
 
 
-vectorRenderable :: (Time,Time) -> (SimpleMarket,SimpleMarket,[(Double,Price)]) -> Renderable (LayoutPick Time Time Time)
-vectorRenderable (start,end) (_,mktDeriv,_) = ((fillBackground ( FillStyleSolid (opaque white) )) .  gridToRenderable) vectorP
+priceRenderableRealT :: (Price,Price) -> Time -> (SimpleMarket,b,[(Time,Price)]) -> Renderable (LayoutPick Time Price Price)
+priceRenderableRealT pricelims maxTime (_,_,price) = (fillBackground ( FillStyleSolid (opaque white) ) .  gridToRenderable) (priceP)
   where
-    vectorP    = tspan (layoutToRenderable (execEC (plotVec start end mktDeriv))) (1,1)
+    priceP     = tspan (layoutToRenderable (plotPriceRealT pricelims maxTime price)) (1,1)
+
+vectorRenderable ::(Double,Double) -> (Time,Time) -> (SimpleMarket,SimpleMarket,a) -> Renderable (LayoutPick Time Time Time)
+vectorRenderable (maxX,maxY) (start,end) (_,mktDeriv,_) = (fillBackground ( FillStyleSolid (opaque white)) .  gridToRenderable) vectorP
+  where
+    vectorP    = tspan (layoutToRenderable (execEC (plotVec maxX maxY start end mktDeriv))) (1,1)

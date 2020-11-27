@@ -22,6 +22,7 @@ module Market(SimpleMarket(..),
               divideMarket,
               plotCurve,
               plotPriceFakeT,
+              plotPriceRealT,
               replaceDates
              ) where
 

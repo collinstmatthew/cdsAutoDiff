@@ -23,7 +23,6 @@ deriving instance Generic Day
 
 instance Backprop Day
 
-
 -- generate schedule from start date end date and calendar diff
 schedule :: Day -> Day -> CalendarDiffDays -> [Day]
 schedule start end diff = reverse $ takeWhile (> start) $ iterate (addGregorianDurationClip diff) end
