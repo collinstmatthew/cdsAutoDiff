@@ -79,7 +79,7 @@ plotCurve name tenorLimits rateLimits c = execEC $ do
 
     --layout_x_axis . laxis_title    .= "Time"
     -- ensure that the x axis has the correct values
-    layout_x_axis . laxis_generate .= autoTimeValueAxis
+    layout_x_axis . laxis_generate .= manipAutoTime tenorLimits
     layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
     layout_x_axis . laxis_title_style . font_size .= 42
 
@@ -112,8 +112,8 @@ plotPriceFakeT priceLimits maxTime prices = execEC $ do
     setColors [opaque black, opaque blue]
     plot $ line "" [ prices ]
 
-manipAutoTime :: Time -> Time-> AxisFn Time
-manipAutoTime min max pts = autoTimeValueAxis $ [min] ++ pts ++ [max]
+manipAutoTime :: (Time,Time) -> AxisFn Time
+manipAutoTime (min,max) pts = autoTimeValueAxis $ [min] ++ (filter (\x -> x<max &&x > min) pts) ++ [max]
 
 plotPriceRealT :: (Price,Price) -> Time -> [(Time,Price)] -> Layout Time Price
 plotPriceRealT priceLimits maxTime prices = execEC $ do
@@ -124,7 +124,7 @@ plotPriceRealT priceLimits maxTime prices = execEC $ do
     layout_y_axis . laxis_title_style . font_size .= 42
 
     -- add maximum times on the axis
-    layout_x_axis . laxis_generate .= manipAutoTime ((fst.head) prices) maxTime
+    layout_x_axis . laxis_generate .= manipAutoTime ((fst.head) prices, maxTime)
     layout_x_axis . laxis_title    .= "Time"
     layout_x_axis . laxis_title_style . font_size .= 42
 

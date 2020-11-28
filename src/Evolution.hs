@@ -9,7 +9,7 @@ import Trades.CDS(Credit(..),cdsPrice,CDS(..),premiumLeg)
 
 import Numeric.Backprop
 
-import Math(genRangeDay,minimum',maximum')
+import Math(genRangeDay)
 
 -- Imports needed for the graph
 import qualified Diagrams.Backend.Cairo.CmdLine as CmdInt
@@ -22,28 +22,25 @@ import Graphics.Rendering.Chart.Easy(Renderable,bitmapAlignmentFns)
 import Graphics.Rendering.Chart.Layout(layoutToRenderable)
 import Graphics.Rendering.Chart.Backend(FillStyle(..))
 import Graphics.Rendering.Chart.Easy
-
 import Graphics.Rendering.Chart.Axis.Time(timeValueFromDouble)
 
 import Data.Tuple.Extra
 
-import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay))
+import Data.Time.Calendar(toModifiedJulianDay,Day(ModifiedJulianDay),diffDays)
 
-import Debug.Trace
-
-type Evolution =(Either [Time] Time,[(SimpleMarket,SimpleMarket,Price)])
+type Evolution =(Either ([Time],Time) (Time,Time),[(SimpleMarket,SimpleMarket,Price)])
 
 evolveLinear :: Time -> CDS -> SimpleMarket -> SimpleMarket -> Integer -> Maybe Time -> Evolution
 evolveLinear pdate cds mktStart mktEnd n evEnd =(pDateEvolve', zip3 allMkts grads' prices) where
     -- pricing dates
+    end = last $view cashDates $ view premiumLeg cds
     pDateEvolve  = case evEnd of
                       Just e  -> genRangeDay pdate e n
                       Nothing -> take (fromInteger (n+2)) $ repeat pdate
     pDateEvolve' = case evEnd of
-                     Just e -> Left pDateEvolve
-                     Nothing -> Right $ pdate
+                     Just e -> Left (pDateEvolve,end)
+                     Nothing -> Right $ (pdate,end)
 
-    end = last $view cashDates $ view premiumLeg cds
 
     intermediateMkt  = divideMarket (fromIntegral (n+1)) $ diffMarket mktEnd mktStart
     allMkts          = take (fromInteger (n+2)) $ iterate (addMarket intermediateMkt) mktStart
@@ -55,20 +52,21 @@ evolveLinear pdate cds mktStart mktEnd n evEnd =(pDateEvolve', zip3 allMkts grad
     grads'           = zipWith replaceDates allMkts grads
 
 limitsIrHaz :: SimpleMarket -> SimpleMarket -> ((Rate,Rate),(Rate,Rate))
-limitsIrHaz mktS mktE = ((minimum' ir, maximum' ir),(minimum' hz, maximum' hz)) where
+limitsIrHaz mktS mktE = ((minimum ir, maximum ir),(minimum hz, maximum hz)) where
     ir = view (irCurve . rates) mktS ++ view (irCurve . rates) mktE
     hz = view (hazardRates . rates) mktS ++ view (hazardRates . rates) mktE
 
 limitsTimeIrHaz :: SimpleMarket -> SimpleMarket -> (Time,Time)
-limitsTimeIrHaz mktS mktE = (minimum' (ir ++ hz), maximum' (ir ++ hz))  where
+limitsTimeIrHaz mktS mktE = (minimum (ir ++ hz), maximum (ir ++ hz))  where
     ir = view (irCurve . dates) mktS ++ view (irCurve . dates) mktE
     hz = view (hazardRates . dates) mktS ++ view (hazardRates . dates) mktE
 
--- plots a linear evolugion of a market
-plotEvolution (Left times,evolution) = do
+-- plots a real evolugion of a market
+plotEvolution (Left (times,end),evolution) = do
     -- limits of the rates in the evolution for plotting
     let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
-    let tenorLimits = (head times, last times)
+    --let tenorLimits = (head times, last times)
+    let tenorLimits = (head times, end)
 
     -- this should be the max element of times not he number of points now
     let numPoints = last times
@@ -95,12 +93,13 @@ plotEvolution (Left times,evolution) = do
     --CmdInt.mainWith $ zip zTotal [1..length zTotal]
     CmdInt.mainWith $ zip zTotalAll [1..length zTotalAll]
 
--- plots a linear evolugion of a market
-plotEvolution (Right pdate,evolution) = do
+-- plots a fake evolugion of a market
+plotEvolution (Right (pdate,end),evolution) = do
     let times::[Double] = take (length evolution)  [0..]
     -- limits of the rates in the evolution for plotting
     let limits = limitsIrHaz (fst3 (head evolution)) (fst3 (last evolution))
-    let tenorLimits =(pdate, snd $ limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution)))
+    --let tenorLimits =(pdate, snd $ limitsTimeIrHaz (fst3 (head evolution)) (fst3 (last evolution)))
+    let tenorLimits =(pdate, end)
 
     let maxTime = length evolution -1
         -- first is either time or dummy time
@@ -132,17 +131,19 @@ plotEvolution (Right pdate,evolution) = do
 
 -- scaled the vectors so that each component is an integer between -100 and 100
 -- take a grid and a function and returns a function from grid -> Grid
-scaleVecs :: Double -> Double -> ((Time,Time) -> (Double,Double)) -> ((Time,Time) -> (Time,Time))
-scaleVecs maxX maxY f1 =  transform . f1         where
-    scaleX = 20 / maxX
-    scaleY = 20 / maxY
+scaleVecs :: Double -> Double -> Double -> ((Time,Time) -> (Double,Double)) -> ((Time,Time) -> (Time,Time))
+scaleVecs tick maxX maxY f1 =  transform . f1         where
+    -- make the original size half of the maximum it could overlap to
+    factor = 0.5
+    scaleX = factor * tick / maxX
+    scaleY = factor * tick / maxY
     transform (x,y) = (timeValueFromDouble (scaleX *x), timeValueFromDouble (scaleY *y))
 
 
-square :: Time -> Time -> SimpleMarket -> [(Time, Time)]
-square start end mkt =  [(x,y) | x <- axis, y <- axis]  where
+square :: Time -> Time -> SimpleMarket -> Integer -> [(Time, Time)]
+square start end mkt space =  [(x,y) | x <- axis, y <- axis]  where
     -- generate 30 points on the grid
-    axis = genRangeDay start end 20
+    axis = genRangeDay start end space
 
 ef' :: Curve -> Curve -> (Time,Time) -> (Double,Double)
 ef' derivCurve hazardCurve (x,y) = ( (getVal' derivCurve y),(getVal' hazardCurve x))
@@ -151,13 +152,12 @@ vectorField start end mkt title f = fmap plotVectorField $ liftEC $ do
     c <- takeColor
     plot_vectors_mapf  .= f
     plot_vectors_scale .= 0
-    plot_vectors_grid  .= square start end mkt
+    plot_vectors_grid  .= square start end mkt 20
     plot_vectors_title .= title
     plot_vectors_style . vector_line_style . line_color .= c
     plot_vectors_style . vector_head_style . point_color .= c
 
 -- filter the axis so it's only for dates between start and end date don't know why more
--- than that are generated automatically
 myaxisvals start end x =  autoTimeValueAxis $ filter (\y -> y >= start && y <= end) x
 
 
@@ -166,7 +166,7 @@ maxVecLength :: (Time,Time) -> SimpleMarket -> (Curve -> Curve -> (Time,Time) ->
 maxVecLength (start,end) market f1 = (maximum allX, maximum allY) where
     ir   = view irCurve market
     hz   = view hazardRates market
-    grid = square start end market
+    grid = square start end market 20
 
     allVecs = map (f1 ir hz) grid
     -- gets the absolutes of everything
@@ -175,10 +175,6 @@ maxVecLength (start,end) market f1 = (maximum allX, maximum allY) where
 
 
 plotVec maxX maxY start end mkt = do
-        let deri = view irCurve mkt
-            heri = view hazardRates mkt
-
-        let myFun = scaleVecs maxX maxY (ef' deri heri)
 
         setColors [opaque blue]
 --        layout_title .= "Derivatives of cds evolution"
@@ -192,6 +188,16 @@ plotVec maxX maxY start end mkt = do
         layout_x_axis . laxis_title     .= "Hazard Sensitivites"
         layout_x_axis . laxis_style . axis_label_style . font_size  .= 36
         layout_x_axis . laxis_title_style . font_size .= 42
+
+        let deri = view irCurve mkt
+            heri = view hazardRates mkt
+
+        let gap = 20
+        -- ticks size on the grid for scaling the vectors
+        let ticks = (fromIntegral (diffDays end start)) / (fromIntegral (gap + 1))
+
+        let myFun = scaleVecs ticks maxX maxY (ef' deri heri)
+
         plot $ vectorField start end mkt "" myFun
 
 

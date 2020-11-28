@@ -1,6 +1,4 @@
-because the vector field is rendered each time it has no concept of scale between images and thus will also resize to make them the same size I expect!
-
 Another assumption is not stub period and first coupon isn't always paid
+Mention that the image is scaled to the first one so that you can't tell the size of each by looking at the animation
 
-splitting up the times into dummy times and what not create two separte plotEvolution functions for now and then make them better after everything is working
 
