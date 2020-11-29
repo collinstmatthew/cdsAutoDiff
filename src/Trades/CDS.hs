@@ -97,19 +97,21 @@ helperF mkt dates = sum res  where
 
 --cdsPrice :: Reifies s W => Time -> CashFlows -> Credit -> BVar s SimpleMarket -> BVar s Price
 cdsPrice :: Reifies s W => Time -> CDS -> BVar s SimpleMarket -> BVar s Price
-cdsPrice pDate cds mkt = couponLeg + aI + defaultLeg where
-    cashFlows = view premiumLeg cds
-    creditData = view creditDetails cds
-    effD = max (view effective cds) pDate
-    couponLeg = cashFlowValue effD cashFlows mkt
-    --take end date to be last coupon payment
-    endDate = last $ view cashDates cashFlows
+cdsPrice pDate cds mkt
+  | pDate > last (view cashDates cashFlows) = 0
+  | otherwise  = couponLeg + aI + defaultLeg where
+        cashFlows = view premiumLeg cds
+        creditData = view creditDetails cds
+        effD = max (view effective cds) pDate
+        couponLeg = cashFlowValue effD cashFlows mkt
+        --take end date to be last coupon payment
+        endDate = last $ view cashDates cashFlows
 
-    -- discount from effective date to pricing date
-    eDateDiscount = 1.0 / (integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effD))
+        -- discount from effective date to pricing date
+        eDateDiscount = 1.0 / (integrateCurve (mkt ^^. irCurve) (auto pDate) (auto effD))
 
-    aI = accruedInterest effD cashFlows mkt
-    defaultLeg = notional' * (1-rr) * protectionLegDF effD endDate mkt where
-        notional'  = cD ^^. notional
-        rr         = cD ^^. recoveryRate
-        cD         = auto creditData
+        aI = accruedInterest effD cashFlows mkt
+        defaultLeg = notional' * (1-rr) * protectionLegDF effD endDate mkt where
+            notional'  = cD ^^. notional
+            rr         = cD ^^. recoveryRate
+            cD         = auto creditData
